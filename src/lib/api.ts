@@ -252,19 +252,93 @@ export const api = {
     const res = await fetch(`${API_BASE}/stats`);
     return res.json();
   },
+
+  // Skills
+  getSkills: async (): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/skills`);
+    return res.json();
+  },
+  getSkillsStats: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/skills/stats`);
+    return res.json();
+  },
+  createSkill: async (skill: any): Promise<any> => {
+    const res = await fetch(`${API_BASE}/skills`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(skill),
+    });
+    return res.json();
+  },
+  updateSkill: async (skillId: string, skill: any): Promise<any> => {
+    const res = await fetch(`${API_BASE}/skills/${skillId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(skill),
+    });
+    return res.json();
+  },
+  deleteSkill: async (skillId: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/skills/${skillId}`, {
+      method: 'DELETE',
+    });
+    return res.json();
+  },
+  toggleSkill: async (skillId: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/skills/${skillId}/toggle`, {
+      method: 'POST',
+    });
+    return res.json();
+  },
+
+  // Agent Summary
+  getAgentsSummary: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/agents/summary`);
+    return res.json();
+  },
+
+  // Chat Logs
+  getAllChatLogs: async (limit: number = 100): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/chats/all?limit=${limit}`);
+    return res.json();
+  },
+
+  // System Status
+  getSystemStatus: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/system/status`);
+    return res.json();
+  },
+
+  // Detailed Activities
+  getDetailedActivities: async (limit: number = 100): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/activities/detailed?limit=${limit}`);
+    return res.json();
+  },
 };
 
 // WebSocket connection
 export const connectWebSocket = (onMessage: (data: any) => void) => {
   const ws = new WebSocket('ws://localhost:8000/ws');
+  let heartbeatInterval: NodeJS.Timeout | null = null;
 
   ws.onopen = () => {
     console.log('WebSocket connected');
+    // Send heartbeat every 15 seconds to keep connection alive
+    heartbeatInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 15000);
   };
 
   ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    onMessage(data);
+    try {
+      const data = JSON.parse(event.data);
+      console.log('WebSocket message:', data);
+      onMessage(data);
+    } catch (e) {
+      console.error('Error parsing WebSocket message:', e);
+    }
   };
 
   ws.onerror = (error) => {
@@ -273,6 +347,9 @@ export const connectWebSocket = (onMessage: (data: any) => void) => {
 
   ws.onclose = () => {
     console.log('WebSocket disconnected');
+    if (heartbeatInterval) {
+      clearInterval(heartbeatInterval);
+    }
   };
 
   return ws;

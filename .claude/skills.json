@@ -1,0 +1,102 @@
+[
+  {
+    "id": "update-config",
+    "name": "update-config",
+    "description": "Configure the Claude Code harness via settings.json",
+    "category": "configuration",
+    "enabled": true,
+    "config": {},
+    "created_at": "2026-05-02T16:25:07.857810",
+    "usage_count": 0
+  },
+  {
+    "id": "keybindings-help",
+    "name": "keybindings-help",
+    "description": "Customize keyboard shortcuts and keybindings",
+    "category": "configuration",
+    "enabled": true,
+    "config": {},
+    "created_at": "2026-05-02T16:25:07.857826",
+    "usage_count": 0
+  },
+  {
+    "id": "simplify",
+    "name": "simplify",
+    "description": "Review changed code for reuse, quality, and efficiency",
+    "category": "code-review",
+    "enabled": true,
+    "config": {},
+    "created_at": "2026-05-02T16:25:07.857827",
+    "usage_count": 0
+  },
+  {
+    "id": "init",
+    "name": "init",
+    "description": "Initialize a new CLAUDE.md file with codebase documentation",
+    "category": "documentation",
+    "enabled": true,
+    "config": {},
+    "created_at": "2026-05-02T16:25:07.857828",
+    "usage_count": 0
+  },
+  {
+    "id": "review",
+    "name": "review",
+    "description": "Review a pull request",
+    "category": "code-review",
+    "enabled": true,
+    "config": {},
+    "created_at": "2026-05-02T16:25:07.857829",
+    "usage_count": 0
+  },
+  {
+    "id": "security-review",
+    "name": "security-review",
+    "description": "Complete a security review of the pending changes",
+    "category": "security",
+    "enabled": true,
+    "config": {},
+    "created_at": "2026-05-02T16:25:07.857830",
+    "usage_count": 0
+  },
+  {
+    "id": "fewer-permission-prompts",
+    "name": "fewer-permission-prompts",
+    "description": "Scan transcripts for common read-only Bash and MCP tool calls",
+    "category": "configuration",
+    "enabled": true,
+    "config": {},
+    "created_at": "2026-05-02T16:25:07.857831",
+    "usage_count": 0
+  },
+  {
+    "id": "loop",
+    "name": "loop",
+    "description": "Run a prompt or slash command on a recurring interval",
+    "category": "automation",
+    "enabled": true,
+    "config": {},
+    "created_at": "2026-05-02T16:25:07.857832",
+    "usage_count": 0
+  },
+  {
+    "id": "schedule",
+    "name": "schedule",
+    "description": "Create, update, list, or run scheduled remote agents",
+    "category": "automation",
+    "enabled": true,
+    "config": {},
+    "created_at": "2026-05-02T16:25:07.857833",
+    "usage_count": 0
+  },
+  {
+    "id": "claude-api",
+    "name": "claude-api",
+    "description": "Build, debug, and optimize Claude API / Anthropic SDK apps",
+    "category": "development",
+    "enabled": true,
+    "config": {},
+    "created_at": "2026-05-02T16:25:07.857834",
+    "usage_count": 0
+  }
+]

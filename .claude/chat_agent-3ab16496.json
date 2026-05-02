@@ -1,0 +1,16 @@
+[
+  {
+    "id": "1777738348.219511",
+    "agent_id": "agent-3ab16496",
+    "role": "user",
+    "content": "Merhaba! Beni tanirsin misin?",
+    "timestamp": "2026-05-02T19:12:28.219522"
+  },
+  {
+    "id": "1777738348.219531.1",
+    "agent_id": "agent-3ab16496",
+    "role": "assistant",
+    "content": "Merhaba! Ben Test Agent 2. CLI tarafından oluşturulmuş bir yapay zeka ajanıyım.\n\nŞu anki hafızamda seninle ilgili herhangi bir kayıt bulunmuyor, bu yüzden seni henüz tanımıyorum. Ancak, bana kendinden bahsedersen veya sorularını sorarsan seni tanımaya başlayabilirim. Nasıl yardımcı olabilirim?",
+    "timestamp": "2026-05-02T19:12:28.219535"
+  }
+]

@@ -13,6 +13,10 @@ import ChatInterface from '@/components/ChatInterface';
 import TaskManager from '@/components/TaskManager';
 import MemoryManager from '@/components/MemoryManager';
 import TrainingInterface from '@/components/TrainingInterface';
+import SkillManager from '@/components/SkillManager';
+import SystemStatus from '@/components/SystemStatus';
+import ChatLogs from '@/components/ChatLogs';
+import AgentSummary from '@/components/AgentSummary';
 
 export default function Home() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -20,7 +24,7 @@ export default function Home() {
   const [hooks, setHooks] = useState<Hook[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
   const [activities, setActivities] = useState<ActivityLog[]>([]);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'agents' | 'hooks' | 'models' | 'activity' | 'chat' | 'tasks' | 'memory' | 'training'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'agents' | 'hooks' | 'models' | 'activity' | 'chat' | 'tasks' | 'memory' | 'training' | 'skills' | 'chatlogs' | 'system'>('dashboard');
 
   useEffect(() => {
     loadInitialData();
@@ -46,10 +50,10 @@ export default function Home() {
         api.getActivity(50),
       ]);
       setStats(statsData);
-      setAgents(agentsData);
-      setHooks(hooksData);
-      setModels(modelsData);
-      setActivities(activitiesData);
+      setAgents(Array.isArray(agentsData) ? agentsData : []);
+      setHooks(Array.isArray(hooksData) ? hooksData : []);
+      setModels(Array.isArray(modelsData) ? modelsData : []);
+      setActivities(Array.isArray(activitiesData) ? activitiesData : []);
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -83,41 +87,24 @@ export default function Home() {
 
   return (
     <DashboardLayout activeTab={activeTab} onTabChange={setActiveTab}>
+      <div className="bg-glow top-[-100px] left-[-100px] opacity-40"></div>
+      <div className="bg-glow bottom-[-100px] right-[-100px] opacity-20"></div>
+
       {activeTab === 'dashboard' && (
         <div className="space-y-8">
-          <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Dashboard</h1>
-            <p className="text-zinc-400">Monitor and manage your AI agents</p>
+          <div className="mb-12 border-b border-zinc-900 pb-8">
+            <h1 className="text-4xl font-bold text-white tracking-tighter terminal-title">
+              AI AGENT <span className="text-primary">CONTROL PANEL</span>
+            </h1>
+            <p className="text-zinc-500 text-sm mt-4 font-mono">
+              v2.0 - MONITORING_READY - SKILLS_ENABLED
+            </p>
           </div>
 
-          {stats && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <StatsCard
-                title="Total Agents"
-                value={stats.total_agents}
-                subtitle={`${stats.active_agents} active`}
-                color="blue"
-              />
-              <StatsCard
-                title="Total Tasks"
-                value={stats.total_tasks}
-                subtitle="Active tasks"
-                color="green"
-              />
-              <StatsCard
-                title="Total Messages"
-                value={stats.total_messages}
-                subtitle="Chat history"
-                color="purple"
-              />
-              <StatsCard
-                title="Memory"
-                value={stats.total_memory}
-                subtitle="Stored memories"
-                color="orange"
-              />
-            </div>
-          )}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <AgentSummary />
+            <SystemStatus />
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div>
@@ -185,6 +172,36 @@ export default function Home() {
             <p className="text-zinc-400">View all system activities</p>
           </div>
           <ActivityFeed activities={activities} showAll />
+        </div>
+      )}
+
+      {activeTab === 'skills' && (
+        <div className="space-y-8">
+          <div>
+            <h1 className="text-4xl font-bold text-white mb-2">Skill Manager</h1>
+            <p className="text-zinc-400">Manage and configure AI skills</p>
+          </div>
+          <SkillManager />
+        </div>
+      )}
+
+      {activeTab === 'chatlogs' && (
+        <div className="space-y-8">
+          <div>
+            <h1 className="text-4xl font-bold text-white mb-2">Chat Logs</h1>
+            <p className="text-zinc-400">View all chat history across all agents</p>
+          </div>
+          <ChatLogs />
+        </div>
+      )}
+
+      {activeTab === 'system' && (
+        <div className="space-y-8">
+          <div>
+            <h1 className="text-4xl font-bold text-white mb-2">System Status</h1>
+            <p className="text-zinc-400">Monitor system health and resources</p>
+          </div>
+          <SystemStatus />
         </div>
       )}
     </DashboardLayout>

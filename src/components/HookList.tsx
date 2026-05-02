@@ -76,7 +76,7 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
         + Create Hook
       </button>
 
-      {hooks.length === 0 ? (
+      {!Array.isArray(hooks) || hooks.length === 0 ? (
         <div className="text-center py-16 bg-zinc-900/50 rounded-2xl border border-zinc-800/50">
           <div className="text-6xl mb-4">⚡</div>
           <p className="text-zinc-400 text-lg">No hooks yet</p>

@@ -45,30 +45,30 @@ export default function ChatInterface({ agents }: ChatInterfaceProps) {
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || !selectedAgent || isLoading) return;
 
-    const userMessage = inputMessage;
+    const userMessage: Message = {
+      id: crypto.randomUUID(),
+      agent_id: selectedAgent.id,
+      role: 'user',
+      content: inputMessage,
+      timestamp: new Date().toISOString(),
+      metadata: {}
+    };
+
+    // Optimistic Update: Mesajı anında göster
+    setMessages(prev => [...prev, userMessage]);
+    const currentInput = inputMessage;
     setInputMessage('');
     setIsLoading(true);
 
     try {
-      const response = await api.chat(selectedAgent.id, userMessage);
+      const response = await api.chat(selectedAgent.id, currentInput);
 
-      // Add user message
-      setMessages(prev => [...prev, {
-        id: crypto.randomUUID(),
-        agent_id: selectedAgent.id,
-        role: 'user',
-        content: userMessage,
-        timestamp: new Date().toISOString(),
-        metadata: {}
-      }]);
-
-      // Add AI response
       setMessages(prev => [...prev, {
         id: crypto.randomUUID(),
         agent_id: selectedAgent.id,
         role: 'assistant',
         content: response.message,
-        timestamp: response.timestamp,
+        timestamp: response.timestamp || new Date().toISOString(),
         metadata: {}
       }]);
 
@@ -78,7 +78,7 @@ export default function ChatInterface({ agents }: ChatInterfaceProps) {
         id: crypto.randomUUID(),
         agent_id: selectedAgent.id,
         role: 'system',
-        content: 'Error: Failed to send message',
+        content: `Error: ${String(error)}`,
         timestamp: new Date().toISOString(),
         metadata: { error: String(error) }
       }]);
@@ -96,117 +96,115 @@ export default function ChatInterface({ agents }: ChatInterfaceProps) {
 
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-4xl font-bold text-white mb-2">Chat</h1>
-        <p className="text-zinc-400">Have conversations with your AI agents</p>
+    <div className="space-y-6">
+      <div className="terminal-title">
+        <h1 className="text-3xl font-bold text-white tracking-tighter">AGENT_TERMINAL</h1>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        {/* Agent Selection */}
-        <div className="lg:col-span-1">
-          <div className="bg-zinc-900/50 rounded-2xl border border-zinc-800/50 p-6">
-            <h2 className="text-lg font-semibold mb-4 text-white">Select Agent</h2>
-            {activeAgents.length === 0 ? (
-              <p className="text-zinc-400 text-sm">No active agents</p>
-            ) : (
-              <div className="space-y-2">
-                {activeAgents.map((agent) => (
-                  <button
-                    key={agent.id}
-                    onClick={() => setSelectedAgent(agent)}
-                    className={`w-full text-left p-4 rounded-xl transition-all ${
-                      selectedAgent?.id === agent.id
-                        ? 'bg-gradient-to-r from-orange-500/20 to-orange-600/10 border border-orange-500/30 text-orange-400 shadow-lg shadow-orange-500/10'
-                        : 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-300 hover:border-zinc-600'
-                    }`}
-                  >
-                    <div className="font-semibold">{agent.name}</div>
-                    <div className="text-xs text-zinc-500 mt-1">{agent.description}</div>
-                  </button>
-                ))}
-              </div>
-            )}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Sidebar */}
+        <div className="lg:col-span-1 space-y-4">
+          <div className="bg-secondary border border-border p-4 rounded-lg">
+            <h2 className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold mb-4">Active_Nodes</h2>
+            <div className="space-y-2">
+              {activeAgents.map((agent) => (
+                <button
+                  key={agent.id}
+                  onClick={() => setSelectedAgent(agent)}
+                  className={`w-full text-left p-3 rounded transition-all font-mono text-sm ${
+                    selectedAgent?.id === agent.id
+                      ? 'bg-primary/10 border-l-2 border-primary text-primary'
+                      : 'hover:bg-zinc-900 text-zinc-400 border-l-2 border-transparent'
+                  }`}
+                >
+                  <div className="font-bold">{agent.name}</div>
+                  <div className="text-[10px] opacity-50 truncate">{agent.description}</div>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Chat Area */}
         <div className="lg:col-span-3">
-          <div className="bg-zinc-900/50 rounded-2xl border border-zinc-800/50 flex flex-col h-[650px]">
+          <div className="bg-secondary border border-border flex flex-col h-[700px] rounded-lg relative overflow-hidden">
+            {/* Header */}
+            <div className="p-4 border-b border-border bg-black/50 backdrop-blur flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${selectedAgent ? 'bg-accent animate-pulse' : 'bg-zinc-700'}`}></div>
+                <span className="text-xs font-mono font-bold uppercase tracking-widest text-zinc-400">
+                  {selectedAgent ? `Connection: ${selectedAgent.name}` : 'Awaiting_Selection...'}
+                </span>
+              </div>
+            </div>
+
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 font-mono">
               {!selectedAgent ? (
-                <div className="text-center text-zinc-400 py-16">
-                  <div className="text-6xl mb-4">💬</div>
-                  <p className="text-lg">Select an agent to start chatting</p>
-                  <p className="text-sm mt-2">Choose an agent from the sidebar</p>
-                </div>
-              ) : !Array.isArray(messages) || messages.length === 0 ? (
-                <div className="text-center text-zinc-400 py-16">
-                  <div className="text-6xl mb-4">👋</div>
-                  <p className="text-lg">Start a conversation</p>
-                  <p className="text-sm mt-2">Send your first message to {selectedAgent.name}</p>
+                <div className="h-full flex flex-col items-center justify-center text-zinc-600">
+                  <div className="text-4xl mb-4 opacity-20">_</div>
+                  <p className="text-xs uppercase tracking-[0.3em]">Select_Node_To_Initialize</p>
                 </div>
               ) : (
-                messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
+                <>
+                  {messages.map((message) => (
                     <div
-                      className={`max-w-[75%] rounded-2xl p-4 ${
-                        message.role === 'user'
-                          ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/25'
-                          : message.role === 'assistant'
-                          ? 'bg-zinc-800 text-zinc-200 border border-zinc-700'
-                          : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                      }`}
+                      key={message.id}
+                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
-                      <div className="text-sm leading-relaxed">{message.content}</div>
-                      <div className="text-xs mt-2 opacity-70">{formatTime(message.timestamp)}</div>
+                      <div
+                        className={`max-w-[85%] p-4 rounded border ${
+                          message.role === 'user'
+                            ? 'bg-primary/5 border-primary/20 text-white'
+                            : message.role === 'assistant'
+                            ? 'bg-zinc-900/50 border-zinc-800 text-zinc-300'
+                            : 'bg-red-900/10 border-red-900/50 text-red-500'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-2 opacity-40 text-[9px] uppercase tracking-widest font-bold">
+                          <span>{message.role === 'user' ? 'Local_User' : message.role === 'assistant' ? 'Remote_Agent' : 'System_Error'}</span>
+                          <span>•</span>
+                          <span>{formatTime(message.timestamp)}</span>
+                        </div>
+                        <div className="text-[13px] leading-relaxed whitespace-pre-wrap">
+                          {message.content}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))
-              )}
-              {isLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-zinc-800 rounded-2xl p-4 border border-zinc-700">
-                    <div className="flex gap-2">
-                      <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                  ))}
+                  {isLoading && (
+                    <div className="flex justify-start">
+                      <div className="p-4 bg-zinc-900/50 border border-zinc-800 text-primary animate-pulse text-[10px] font-bold tracking-[0.2em] uppercase">
+                        Claude_Is_Thinking...
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  )}
+                </>
               )}
               <div ref={messagesEndRef} />
             </div>
 
             {/* Input Area */}
-            <div className="p-6 border-t border-zinc-800/50">
-              <div className="flex gap-3">
+            <div className="p-4 bg-black border-t border-border">
+              <div className="relative">
                 <textarea
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  placeholder="Type your message..."
+                  placeholder={selectedAgent ? "Enter command..." : "Initialize connection first..."}
                   disabled={!selectedAgent || isLoading}
-                  className="flex-1 bg-zinc-800/50 border border-zinc-700/50 rounded-xl px-5 py-4 text-white placeholder-zinc-500 resize-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
-                  rows={2}
+                  className="w-full bg-zinc-900 border border-border rounded p-4 pr-24 text-white placeholder-zinc-700 resize-none focus:border-primary transition-all text-sm font-mono min-h-[100px]"
                 />
                 <button
                   onClick={handleSendMessage}
                   disabled={!selectedAgent || isLoading || !inputMessage.trim()}
-                  className="px-6 py-4 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 disabled:bg-zinc-800 disabled:text-zinc-500 disabled:cursor-not-allowed text-white rounded-xl transition-all font-medium shadow-lg shadow-orange-500/25"
+                  className="absolute right-3 bottom-3 px-4 py-2 bg-primary text-black font-bold text-xs rounded hover:bg-white transition-all disabled:opacity-20 uppercase tracking-widest"
                 >
-                  {isLoading ? '...' : 'Send'}
+                  {isLoading ? 'Wait' : 'Run'}
                 </button>
               </div>
             </div>

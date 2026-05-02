@@ -4,3 +4,5 @@ websockets
 pydantic
 python-multipart
 aiofiles
+openai
+python-dotenv

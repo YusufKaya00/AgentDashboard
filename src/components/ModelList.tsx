@@ -12,6 +12,7 @@ interface ModelListProps {
 export default function ModelList({ models, onRefresh }: ModelListProps) {
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
+    id: '',
     name: '',
     provider: 'custom' as const,
     api_endpoint: '',
@@ -19,9 +20,11 @@ export default function ModelList({ models, onRefresh }: ModelListProps) {
     model_id: '',
     capabilities: [] as string[],
   });
+  const [isEditing, setIsEditing] = useState(false);
 
   const handleCreate = () => {
     setFormData({
+      id: crypto.randomUUID(),
       name: '',
       provider: 'custom',
       api_endpoint: '',
@@ -29,17 +32,34 @@ export default function ModelList({ models, onRefresh }: ModelListProps) {
       model_id: '',
       capabilities: [],
     });
+    setIsEditing(false);
+    setShowModal(true);
+  };
+
+  const handleEdit = (model: AIModel) => {
+    setFormData({
+      ...model,
+      capabilities: Array.isArray(model.capabilities) ? model.capabilities : [],
+    });
+    setIsEditing(true);
     setShowModal(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.createModel({
-      id: crypto.randomUUID(),
-      ...formData,
-      enabled: true,
-      config: {},
-    });
+    if (isEditing) {
+      await api.updateModel(formData.id, {
+        ...formData,
+        enabled: true,
+        config: {},
+      });
+    } else {
+      await api.createModel({
+        ...formData,
+        enabled: true,
+        config: {},
+      });
+    }
     setShowModal(false);
     onRefresh();
   };
@@ -111,12 +131,21 @@ export default function ModelList({ models, onRefresh }: ModelListProps) {
                         ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
                         : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'
                     }`}
+                    title={model.enabled ? 'Enabled' : 'Disabled'}
                   >
                     {model.enabled ? '✓' : '○'}
                   </button>
                   <button
+                    onClick={() => handleEdit(model)}
+                    className="w-10 h-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center hover:bg-primary/30 transition-all"
+                    title="Edit"
+                  >
+                    ✏️
+                  </button>
+                  <button
                     onClick={() => handleDelete(model.id)}
                     className="w-10 h-10 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center hover:bg-red-500/30 transition-all"
+                    title="Delete"
                   >
                     🗑️
                   </button>
@@ -156,7 +185,9 @@ export default function ModelList({ models, onRefresh }: ModelListProps) {
       {showModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
           <div className="bg-zinc-900 rounded-2xl shadow-2xl max-w-md w-full mx-4 border border-zinc-800 p-8">
-            <h2 className="text-2xl font-bold mb-6 text-white">Add New Model</h2>
+            <h2 className="text-2xl font-bold mb-6 text-white">
+              {isEditing ? 'Edit Model' : 'Add New Model'}
+            </h2>
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
                 <label className="block text-sm font-semibold text-zinc-300 mb-2">
@@ -241,7 +272,7 @@ export default function ModelList({ models, onRefresh }: ModelListProps) {
                   type="submit"
                   className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl transition-all font-medium shadow-lg shadow-orange-500/25"
                 >
-                  Add
+                  {isEditing ? 'Save Changes' : 'Add Model'}
                 </button>
               </div>
             </form>
