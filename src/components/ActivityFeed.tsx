@@ -25,16 +25,28 @@ export default function ActivityFeed({ activities, showAll = false }: ActivityFe
     }
   };
 
-  const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
+  const formatTime = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return new Date().toLocaleTimeString();
+      return date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
+    } catch (e) {
+      return new Date().toLocaleTimeString();
+    }
   };
 
-  if (!Array.isArray(displayActivities) || displayActivities.length === 0) {
+  const getAgentLabel = (id: string) => {
+    if (id === 'team_leader' || id === 'cli') return 'Team Leader';
+    return id;
+  };
+
+  const validActivities = displayActivities.filter(a => a && a.message && a.timestamp);
+
+  if (validActivities.length === 0) {
     return (
       <div className="text-center py-16 bg-zinc-900/50 rounded-2xl border border-zinc-800/50">
         <div className="text-6xl mb-4">📝</div>
@@ -46,8 +58,8 @@ export default function ActivityFeed({ activities, showAll = false }: ActivityFe
   return (
     <div className="bg-zinc-900/50 rounded-2xl border border-zinc-800/50 overflow-hidden">
       <div className="divide-y divide-zinc-800/50">
-        {displayActivities.map((activity) => (
-          <div key={activity.id} className="p-5 hover:bg-zinc-800/30 transition-colors">
+        {validActivities.map((activity, index) => (
+          <div key={activity.id || `${activity.agent_id}-${activity.timestamp}-${index}`} className="p-5 hover:bg-zinc-800/30 transition-colors">
             <div className="flex items-start gap-4">
               <div className="flex-shrink-0">
                 <span className={`px-3 py-1.5 text-xs font-semibold rounded-full border ${getTypeColor(activity.type)}`}>
@@ -57,7 +69,7 @@ export default function ActivityFeed({ activities, showAll = false }: ActivityFe
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-zinc-200">{activity.message}</p>
                 <div className="mt-2 flex items-center gap-3 text-xs text-zinc-500">
-                  <span>Agent ID: {activity.agent_id}</span>
+                  <span className="font-bold text-primary/70">{getAgentLabel(activity.agent_id)}</span>
                   <span>•</span>
                   <span>{formatTime(activity.timestamp)}</span>
                 </div>

@@ -125,6 +125,9 @@ export default function AgentList({ agents, onRefresh, showAll = false }: AgentL
                         <button onClick={() => handleToggle(agent)} className="p-2 hover:text-primary transition-colors text-zinc-600">
                           {agent.status === 'active' ? 'PAUSE' : 'RUN'}
                         </button>
+                        <button onClick={() => alert(JSON.stringify(agent, null, 2))} className="p-2 hover:text-accent transition-colors text-zinc-600">
+                          META
+                        </button>
                         <button onClick={() => handleEdit(agent)} className="p-2 hover:text-white transition-colors text-zinc-600">
                           EDIT
                         </button>

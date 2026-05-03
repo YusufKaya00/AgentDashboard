@@ -1,72 +1,42 @@
 [
   {
-    "id": "36b9565d-42c4-413d-82a2-2e95a9abe99a",
+    "capabilities": [
+      "orchestration",
+      "planning",
+      "code-review",
+      "terminal",
+      "shell",
+      "chat",
+      "code"
+    ],
+    "config": {
+      "is_cli": true
+    },
+    "created_at": "2026-05-03T16:28:41.770104",
+    "description": "Main orchestrator and project lead using the terminal interface",
+    "id": "team_leader",
+    "model": "claude-opus-4-7 (GLM 4.7)",
     "name": "Team Leader",
-    "description": "Orchestrates multi-agent workflows and manages project structure.",
-    "model": "claude-3-opus-20240229",
+    "role": "leader",
     "status": "active",
-    "role": "team_lead",
+    "updated_at": "2026-05-03T16:56:00Z"
+  },
+  {
     "capabilities": [
-      "Project Planning",
-      "File Management",
-      "Code Review",
-      "Multi-Agent Coordination"
+      "api-design",
+      "backend-integration",
+      "system-health",
+      "architecture-review",
+      "documentation"
     ],
     "config": {},
-    "created_at": "2024-05-01T12:00:00Z",
-    "updated_at": "2024-05-02T14:20:00Z"
-  },
-  {
-    "id": "49c67414-5fc3-4f70-ab4d-bc9ea8b456c7",
-    "name": "Frontend Agent",
-    "description": "Specializes in React, Next.js, and Tailwind CSS implementation.",
-    "model": "claude-3-5-sonnet-20241022",
-    "status": "active",
-    "role": "specialist",
-    "capabilities": [
-      "React/Next.js",
-      "Tailwind CSS",
-      "UI/UX Optimization",
-      "Component Design"
-    ],
-    "config": {},
-    "created_at": "2024-05-01T12:00:00Z",
-    "updated_at": "2024-05-02T14:20:00Z"
-  },
-  {
-    "id": "agent-afdb5b0a",
-    "name": "Test Agent",
-    "description": "CLI tarafindan olusturulan test agent",
+    "created_at": "2026-05-03T17:00:00Z",
+    "description": "Backend architecture and API design specialist",
+    "id": "system-architect",
     "model": "claude-opus-4-7",
+    "name": "System Architect",
+    "role": "architect",
     "status": "active",
-    "role": "background",
-    "capabilities": [
-      "chat",
-      "analyze",
-      "code"
-    ],
-    "config": {
-      "is_background": true
-    },
-    "created_at": "2026-05-02T18:48:41.671115",
-    "updated_at": "2026-05-02T18:48:41.671128"
-  },
-  {
-    "id": "agent-3ab16496",
-    "name": "Test Agent 2",
-    "description": "CLI tarafindan olusturulan test agent 2",
-    "model": "claude-opus-4-7",
-    "status": "active",
-    "role": "background",
-    "capabilities": [
-      "chat",
-      "analyze",
-      "code"
-    ],
-    "config": {
-      "is_background": true
-    },
-    "created_at": "2026-05-02T19:07:53.459805",
-    "updated_at": "2026-05-02T19:07:53.459816"
+    "updated_at": "2026-05-03T17:00:00Z"
   }
 ]

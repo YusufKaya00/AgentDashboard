@@ -4,24 +4,20 @@ import { ReactNode } from 'react';
 
 interface DashboardLayoutProps {
   children: ReactNode;
-  activeTab: 'dashboard' | 'agents' | 'hooks' | 'models' | 'activity' | 'chat' | 'tasks' | 'memory' | 'training' | 'skills' | 'chatlogs' | 'system';
-  onTabChange: (tab: 'dashboard' | 'agents' | 'hooks' | 'models' | 'activity' | 'chat' | 'tasks' | 'memory' | 'training' | 'skills' | 'chatlogs' | 'system') => void;
+  activeTab: 'dashboard' | 'agents' | 'skills' | 'hooks' | 'models' | 'activity' | 'clisessions' | 'system';
+  onTabChange: (tab: 'dashboard' | 'agents' | 'skills' | 'hooks' | 'models' | 'activity' | 'clisessions' | 'system') => void;
 }
 
 export default function DashboardLayout({ children, activeTab, onTabChange }: DashboardLayoutProps) {
   const tabs = [
     { id: 'dashboard' as const, label: 'Dashboard', icon: '📊' },
-    { id: 'agents' as const, label: 'Agents', icon: '🤖' },
-    { id: 'chat' as const, label: 'Chat', icon: '💬' },
-    { id: 'skills' as const, label: 'Skills', icon: '⚡' },
-    { id: 'chatlogs' as const, label: 'Chat Logs', icon: '📝' },
-    { id: 'system' as const, label: 'System', icon: '🔧' },
-    { id: 'tasks' as const, label: 'Tasks', icon: '✅' },
-    { id: 'memory' as const, label: 'Memory', icon: '🧠' },
-    { id: 'training' as const, label: 'Training', icon: '📚' },
-    { id: 'hooks' as const, label: 'Hooks', icon: '🔗' },
-    { id: 'models' as const, label: 'Models', icon: '🎯' },
-    { id: 'activity' as const, label: 'Activity', icon: '📈' },
+    { id: 'agents' as const, label: 'Agent Management', icon: '🤖' },
+    { id: 'clisessions' as const, label: 'CLI Sessions', icon: '🖥️' },
+    { id: 'skills' as const, label: 'Skill Manager', icon: '⚡' },
+    { id: 'hooks' as const, label: 'Hook Manager', icon: '🔗' },
+    { id: 'models' as const, label: 'AI Models', icon: '🎯' },
+    { id: 'activity' as const, label: 'Activity Feed', icon: '📈' },
+    { id: 'system' as const, label: 'System Health', icon: '🔧' },
   ];
 
   return (

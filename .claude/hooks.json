@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "id": "auto-save",
+    "name": "Auto-Save Workspace",
+    "event": "file_change",
+    "action": "git commit -m 'Auto-save changes'",
+    "enabled": true
+  },
+  {
+    "id": "lint-check",
+    "name": "Lint on Save",
+    "event": "file_change",
+    "action": "npm run lint",
+    "enabled": false
+  }
+]

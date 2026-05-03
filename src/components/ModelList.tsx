@@ -166,7 +166,7 @@ export default function ModelList({ models, onRefresh }: ModelListProps) {
                 <div>
                   <span className="text-zinc-500">Capabilities:</span>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {model.capabilities.map((cap) => (
+                    {model.capabilities?.map((cap: string) => (
                       <span
                         key={cap}
                         className="px-3 py-1 bg-orange-500/10 text-orange-400 text-xs rounded-lg"

@@ -49,6 +49,10 @@ export const api = {
     const res = await fetch(`${API_BASE}/agents/${agentId}/subordinates`);
     return res.json();
   },
+  getAgentPrompt: async (id: string): Promise<{ prompt: string }> => {
+    const res = await fetch(`${API_BASE}/agents/${id}/prompt`);
+    return res.json();
+  },
 
   // Chat
   chat: async (agentId: string, message: string, context: any = {}): Promise<any> => {
@@ -312,6 +316,16 @@ export const api = {
   // Detailed Activities
   getDetailedActivities: async (limit: number = 100): Promise<any[]> => {
     const res = await fetch(`${API_BASE}/activities/detailed?limit=${limit}`);
+    return res.json();
+  },
+  
+  // Monitoring Logs
+  getCLILogs: async (limit: number = 100): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/logs/cli?limit=${limit}`);
+    return res.json();
+  },
+  getSprintLogs: async (limit: number = 100): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/logs/sprints?limit=${limit}`);
     return res.json();
   },
 };

@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "id": "nv-sonnet",
+    "name": "Claude 3.5 Sonnet (Nvidia NIM)",
+    "provider": "nvidia",
+    "api_endpoint": "https://integrate.api.nvidia.com/v1",
+    "capabilities": ["vision", "chat", "code", "tools"],
+    "enabled": true
+  },
+  {
+    "id": "anthropic-opus",
+    "name": "Claude 3 Opus",
+    "provider": "anthropic",
+    "capabilities": ["vision", "chat", "code", "complex-reasoning"],
+    "enabled": true
+  }
+]

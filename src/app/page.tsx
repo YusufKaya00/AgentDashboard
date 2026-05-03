@@ -4,19 +4,14 @@ import { useState, useEffect } from 'react';
 import { api, connectWebSocket } from '@/lib/api';
 import { Agent, Hook, AIModel, ActivityLog, Stats } from '@/types';
 import DashboardLayout from '@/components/DashboardLayout';
-import StatsCard from '@/components/StatsCard';
 import AgentList from '@/components/AgentList';
 import ActivityFeed from '@/components/ActivityFeed';
 import ModelList from '@/components/ModelList';
 import HookList from '@/components/HookList';
-import ChatInterface from '@/components/ChatInterface';
-import TaskManager from '@/components/TaskManager';
-import MemoryManager from '@/components/MemoryManager';
-import TrainingInterface from '@/components/TrainingInterface';
 import SkillManager from '@/components/SkillManager';
 import SystemStatus from '@/components/SystemStatus';
-import ChatLogs from '@/components/ChatLogs';
 import AgentSummary from '@/components/AgentSummary';
+import CLISessions from '@/components/CLISessions';
 
 export default function Home() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -24,15 +19,17 @@ export default function Home() {
   const [hooks, setHooks] = useState<Hook[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
   const [activities, setActivities] = useState<ActivityLog[]>([]);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'agents' | 'hooks' | 'models' | 'activity' | 'chat' | 'tasks' | 'memory' | 'training' | 'skills' | 'chatlogs' | 'system'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'agents' | 'skills' | 'hooks' | 'models' | 'activity' | 'clisessions' | 'system'>('dashboard');
 
   useEffect(() => {
     loadInitialData();
 
     // WebSocket connection for live updates
     const ws = connectWebSocket((data) => {
-      setActivities((prev) => [data, ...prev].slice(0, 100));
-      loadStats();
+      if (data.type === 'activity') {
+        setActivities((prev) => [data.data, ...prev].slice(0, 100));
+        loadStats();
+      }
     });
 
     return () => {
@@ -97,7 +94,7 @@ export default function Home() {
               AI AGENT <span className="text-primary">CONTROL PANEL</span>
             </h1>
             <p className="text-zinc-500 text-sm mt-4 font-mono">
-              v2.0 - MONITORING_READY - SKILLS_ENABLED
+              v3.0 — MONITORING & MANAGEMENT
             </p>
           </div>
 
@@ -129,27 +126,15 @@ export default function Home() {
         </div>
       )}
 
-      {activeTab === 'chat' && (
-        <ChatInterface agents={agents} />
-      )}
-
-      {activeTab === 'tasks' && (
-        <TaskManager agents={agents} />
-      )}
-
-      {activeTab === 'memory' && (
-        <MemoryManager agents={agents} />
-      )}
-
-      {activeTab === 'training' && (
-        <TrainingInterface agents={agents} />
+      {activeTab === 'clisessions' && (
+        <CLISessions />
       )}
 
       {activeTab === 'hooks' && (
         <div className="space-y-8">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Hook Management</h1>
-            <p className="text-zinc-400">Configure pre, post, and error hooks</p>
+            <h1 className="text-4xl font-bold text-white mb-2 font-display">Hook Management</h1>
+            <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">Configure pre, post, and error hooks</p>
           </div>
           <HookList hooks={hooks} onRefresh={refreshHooks} />
         </div>
@@ -158,8 +143,8 @@ export default function Home() {
       {activeTab === 'models' && (
         <div className="space-y-8">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Model Management</h1>
-            <p className="text-zinc-400">Add and configure AI models</p>
+            <h1 className="text-4xl font-bold text-white mb-2 font-display">Model Management</h1>
+            <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">Add and configure AI models</p>
           </div>
           <ModelList models={models} onRefresh={refreshModels} />
         </div>
@@ -168,8 +153,8 @@ export default function Home() {
       {activeTab === 'activity' && (
         <div className="space-y-8">
           <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Activity Logs</h1>
-            <p className="text-zinc-400">View all system activities</p>
+            <h1 className="text-4xl font-bold text-white mb-2 font-display">System Activity</h1>
+            <p className="text-zinc-500 font-mono text-xs uppercase tracking-widest">Full audit log of all system events</p>
           </div>
           <ActivityFeed activities={activities} showAll />
         </div>
@@ -177,30 +162,12 @@ export default function Home() {
 
       {activeTab === 'skills' && (
         <div className="space-y-8">
-          <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Skill Manager</h1>
-            <p className="text-zinc-400">Manage and configure AI skills</p>
-          </div>
           <SkillManager />
-        </div>
-      )}
-
-      {activeTab === 'chatlogs' && (
-        <div className="space-y-8">
-          <div>
-            <h1 className="text-4xl font-bold text-white mb-2">Chat Logs</h1>
-            <p className="text-zinc-400">View all chat history across all agents</p>
-          </div>
-          <ChatLogs />
         </div>
       )}
 
       {activeTab === 'system' && (
         <div className="space-y-8">
-          <div>
-            <h1 className="text-4xl font-bold text-white mb-2">System Status</h1>
-            <p className="text-zinc-400">Monitor system health and resources</p>
-          </div>
           <SystemStatus />
         </div>
       )}
