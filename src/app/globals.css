@@ -149,20 +149,36 @@ body {
 
 /* UI Elements */
 .glass-card {
-  background-color: rgba(255, 255, 255, 0.02);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 1.5rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-xl);
+  padding: 1.75rem;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top left, rgba(217, 119, 87, 0.03), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.4s;
+  pointer-events: none;
 }
 
 .glass-card:hover {
+  transform: translateY(-4px) scale(1.01);
+  background: rgba(255, 255, 255, 0.05);
   border-color: rgba(217, 119, 87, 0.2);
-  background-color: rgba(255, 255, 255, 0.04);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-xl);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5), 0 0 20px 0 rgba(217, 119, 87, 0.05);
+}
+
+.glass-card:hover::before {
+  opacity: 1;
 }
 
 .btn {
@@ -170,13 +186,15 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.625rem 1.25rem;
-  border-radius: var(--radius-md);
-  font-weight: 600;
+  padding: 0.75rem 1.25rem;
   font-size: 0.875rem;
+  font-weight: 700;
+  border-radius: var(--radius-lg);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
-  transition: all 0.2s;
-  border: 1px solid transparent;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .btn:active {
@@ -186,24 +204,26 @@ body {
 .btn-primary {
   background-color: var(--primary);
   color: white;
+  border: 1px solid var(--primary);
   box-shadow: 0 4px 12px var(--primary-glow);
 }
 
 .btn-primary:hover {
-  background-color: #e88a6a;
-  transform: translateY(-1px);
-  box-shadow: 0 8px 24px var(--primary-glow);
+  background-color: #e58a6d;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px var(--primary-glow);
 }
 
 .btn-secondary {
   background-color: rgba(255, 255, 255, 0.05);
-  color: white;
-  border-color: var(--border);
+  color: var(--foreground);
+  border: 1px solid var(--border);
 }
 
 .btn-secondary:hover {
   background-color: rgba(255, 255, 255, 0.1);
-  border-color: rgba(217, 119, 87, 0.3);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
 }
 
 .badge {
@@ -222,44 +242,46 @@ body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(8px);
+  background-color: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   padding: 1.5rem;
-  animation: fade-in 0.3s ease-out;
+  animation: fade-in 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .modal-content {
-  background-color: var(--background-alt);
-  border: 1px solid var(--border);
+  background-color: #0c0c0e;
+  background-image: radial-gradient(circle at top left, rgba(217, 119, 87, 0.05), transparent 50%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-xl);
   width: 100%;
   max-width: 500px;
-  box-shadow: var(--shadow-xl);
+  box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.7);
   position: relative;
   overflow: hidden;
+  animation: scale-up 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Form Elements */
 .input, .select {
   width: 100%;
-  background-color: rgba(255, 255, 255, 0.03);
+  background-color: rgba(0, 0, 0, 0.2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 0.75rem 1rem;
+  border-radius: var(--radius-lg);
+  padding: 0.875rem 1.25rem;
   color: var(--foreground);
   font-size: 0.875rem;
-  transition: all 0.2s;
+  transition: all 0.3s;
   outline: none;
 }
 
 .input:focus, .select:focus {
   border-color: var(--primary);
-  background-color: rgba(255, 255, 255, 0.05);
-  box-shadow: 0 0 0 2px var(--primary-glow);
+  background-color: rgba(0, 0, 0, 0.3);
+  box-shadow: 0 0 0 4px var(--primary-glow);
 }
 
 .switch {

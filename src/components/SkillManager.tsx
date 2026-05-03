@@ -113,10 +113,10 @@ export default function SkillManager() {
       {/* Header Section */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-black text-white tracking-tight">Skill <span className="text-[#8e8e93] font-light">Manager</span></h2>
+          <h2 className="text-3xl font-black text-white tracking-tight">Skill <span className="text-[var(--foreground-muted)] font-light">Manager</span></h2>
           <div className="flex items-center gap-2 mt-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#d97757] animate-pulse"></span>
-            <p className="text-[10px] text-[#8e8e93] font-bold uppercase tracking-[0.2em]">Operational Capabilities</p>
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)] animate-pulse"></span>
+            <p className="text-[10px] text-[var(--foreground-muted)] font-bold uppercase tracking-[0.2em]">Operational Capabilities</p>
           </div>
         </div>
         <button
@@ -137,26 +137,26 @@ export default function SkillManager() {
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {[
-            { label: 'Total Matrix', value: stats.total, color: 'text-white' },
-            { label: 'Active State', value: stats.enabled, color: 'text-[#00c853]' },
-            { label: 'Offline', value: stats.disabled, color: 'text-[#8e8e93]' },
-            { label: 'Custom Nodes', value: stats.categories?.custom || 0, color: 'text-[#d97757]' }
+            { label: 'Total Matrix', value: stats.total, color: 'var(--foreground)' },
+            { label: 'Active State', value: stats.enabled, color: 'var(--accent)' },
+            { label: 'Offline', value: stats.disabled, color: 'var(--foreground-muted)' },
+            { label: 'Custom Nodes', value: stats.categories?.custom || 0, color: 'var(--primary)' }
           ].map((stat, i) => (
-            <div key={i} className="glass-card p-6 border border-white/5 relative overflow-hidden group">
-              <div className="text-2xl font-black mb-1 group-hover:scale-110 transition-transform origin-left">{stat.value}</div>
-              <div className="text-[10px] text-[#8e8e93] font-bold uppercase tracking-widest">{stat.label}</div>
-              <div className="absolute top-0 right-0 w-16 h-16 bg-white/[0.02] rounded-bl-full -mr-4 -mt-4 group-hover:bg-[#d97757]/10 transition-colors" />
+            <div key={i} className="glass-card relative overflow-hidden group">
+              <div className="text-2xl font-black mb-1 group-hover:scale-110 transition-transform origin-left" style={{ color: stat.color }}>{stat.value}</div>
+              <div className="text-[10px] text-[var(--foreground-muted)] font-bold uppercase tracking-widest">{stat.label}</div>
+              <div className="absolute top-0 right-0 w-16 h-16 bg-white/[0.02] rounded-bl-full -mr-4 -mt-4 group-hover:bg-[var(--primary-glow)] transition-colors" />
             </div>
           ))}
         </div>
       )}
 
       {showAddForm && (
-        <form onSubmit={handleAddSkill} className="glass-card p-8 border border-[#d97757]/20 animate-scale-in">
+        <form onSubmit={handleAddSkill} className="glass-card border-[var(--primary)] border-opacity-20 animate-fade-in">
           <h3 className="text-xl font-bold text-white mb-6">Initialize New Capability</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-[#8e8e93] uppercase tracking-widest ml-1">Identity Name</label>
+              <label className="text-[10px] font-black text-[var(--foreground-muted)] uppercase tracking-widest ml-1">Identity Name</label>
               <input
                 type="text"
                 value={newSkill.name}
@@ -167,7 +167,7 @@ export default function SkillManager() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-[#8e8e93] uppercase tracking-widest ml-1">Capability Category</label>
+              <label className="text-[10px] font-black text-[var(--foreground-muted)] uppercase tracking-widest ml-1">Capability Category</label>
               <select
                 value={newSkill.category}
                 onChange={(e) => setNewSkill({ ...newSkill, category: e.target.value })}
@@ -183,11 +183,11 @@ export default function SkillManager() {
               </select>
             </div>
             <div className="md:col-span-2 space-y-2">
-              <label className="text-[10px] font-black text-[#8e8e93] uppercase tracking-widest ml-1">Operational Description</label>
+              <label className="text-[10px] font-black text-[var(--foreground-muted)] uppercase tracking-widest ml-1">Operational Description</label>
               <textarea
                 value={newSkill.description}
                 onChange={(e) => setNewSkill({ ...newSkill, description: e.target.value })}
-                className="textarea w-full"
+                className="input w-full min-h-[100px] resize-y"
                 placeholder="Define the primary operational objective of this skill..."
                 rows={4}
                 required
@@ -205,13 +205,13 @@ export default function SkillManager() {
         {skills.map((skill) => (
           <div
             key={skill.id}
-            className={`glass-card p-6 flex items-center justify-between border-white/5 hover:bg-white/[0.04] transition-all group ${
+            className={`glass-card flex items-center justify-between group ${
               !skill.enabled ? 'opacity-40 grayscale pointer-events-none' : ''
             }`}
           >
             <div className="flex items-center gap-6 flex-1">
-              <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 group-hover:border-[#d97757]/30 group-hover:bg-[#d97757]/5 transition-all">
-                <div className="w-2 h-2 rounded-full bg-[#d97757]" />
+              <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 group-hover:border-[var(--primary)] group-hover:bg-[var(--primary-glow)] transition-all">
+                <div className="w-2 h-2 rounded-full bg-[var(--primary)]" />
               </div>
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-1">
@@ -220,16 +220,16 @@ export default function SkillManager() {
                     {skill.category.replace('_', ' ')}
                   </span>
                 </div>
-                <p className="text-sm text-[#8e8e93] leading-relaxed max-w-2xl">{skill.description}</p>
+                <p className="text-sm text-[var(--foreground-muted)] leading-relaxed max-w-2xl">{skill.description}</p>
                 <div className="flex items-center gap-4 mt-3">
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">Usage:</span>
-                    <span className="text-[10px] font-bold text-[#d97757] tabular-nums">{skill.usage_count} sessions</span>
+                    <span className="text-[10px] font-bold text-[var(--primary)] tabular-nums">{skill.usage_count} sessions</span>
                   </div>
                   <div className="w-1 h-1 rounded-full bg-white/10" />
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">Initialized:</span>
-                    <span className="text-[10px] font-bold text-[#8e8e93]">{new Date(skill.created_at).toLocaleDateString()}</span>
+                    <span className="text-[10px] font-bold text-[var(--foreground-muted)]">{new Date(skill.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>
               </div>
@@ -242,7 +242,7 @@ export default function SkillManager() {
               />
               <button
                 onClick={() => handleDeleteSkill(skill.id)}
-                className="btn btn-ghost btn-sm text-red-500/50 hover:text-red-500 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+                className="btn btn-secondary p-1.5 hover:text-red-500 opacity-0 group-hover:opacity-100"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -260,7 +260,7 @@ export default function SkillManager() {
               </svg>
             </div>
             <h3 className="text-xl font-bold text-white mb-2">No Capability Nodes Found</h3>
-            <p className="text-sm text-[#8e8e93]">Initialize your first operational skill to begin system expansion.</p>
+            <p className="text-sm text-[var(--foreground-muted)]">Initialize your first operational skill to begin system expansion.</p>
           </div>
         )}
       </div>

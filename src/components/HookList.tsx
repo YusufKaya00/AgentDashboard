@@ -72,10 +72,10 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
       {/* Header Section */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-black text-white tracking-tight">Hook <span className="text-[#8e8e93] font-light">Architecture</span></h2>
+          <h2 className="text-3xl font-black text-white tracking-tight">Hook <span className="text-[var(--foreground-muted)] font-light">Architecture</span></h2>
           <div className="flex items-center gap-2 mt-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#d97757] animate-pulse"></span>
-            <p className="text-[10px] text-[#8e8e93] font-bold uppercase tracking-[0.2em]">Interception Layer</p>
+            <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)] animate-pulse"></span>
+            <p className="text-[10px] text-[var(--foreground-muted)] font-bold uppercase tracking-[0.2em]">Interception Layer</p>
           </div>
         </div>
         <button
@@ -97,21 +97,21 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
             </svg>
           </div>
           <h3 className="text-xl font-bold text-white mb-2">No Active Hooks Detected</h3>
-          <p className="text-sm text-[#8e8e93]">Configure interception hooks to monitor or modify system event flows.</p>
+          <p className="text-sm text-[var(--foreground-muted)]">Configure interception hooks to monitor or modify system event flows.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {hooks.map((hook) => (
             <div
               key={hook.id}
-              className={`glass-card p-6 border-white/5 hover:bg-white/[0.04] transition-all group relative overflow-hidden ${
+              className={`glass-card group flex flex-col ${
                 !hook.enabled ? 'opacity-40 grayscale pointer-events-none' : ''
               }`}
             >
               <div className="flex items-start justify-between mb-6">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <div className="w-2 h-2 rounded-full bg-[#d97757]" />
+                    <div className="w-2 h-2 rounded-full bg-[var(--primary)]" />
                     <h3 className="text-lg font-bold text-white tracking-tight">{hook.name}</h3>
                   </div>
                   <span className={`badge ${getTypeColor(hook.type || 'custom')}`}>
@@ -125,7 +125,7 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
                   />
                   <button
                     onClick={() => handleDelete(hook.id)}
-                    className="btn btn-ghost btn-sm text-red-500/30 hover:text-red-500 hover:bg-red-500/10 transition-all"
+                    className="btn btn-secondary p-1.5 hover:text-red-500"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -141,7 +141,7 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
                 </div>
                 <div className="p-3 rounded-xl bg-white/5 border border-white/5 group-hover:bg-white/10 transition-colors">
                   <span className="text-[10px] font-black text-white/20 uppercase tracking-widest block mb-1.5">Action Executable</span>
-                  <span className="text-[11px] text-[#d97757] font-mono break-all">{hook.action}</span>
+                  <span className="text-[11px] text-[var(--primary)] font-mono break-all">{hook.action}</span>
                 </div>
               </div>
             </div>
