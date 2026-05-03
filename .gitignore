@@ -47,3 +47,4 @@ venv/
 
 # Project Data (Optional: ignore local activity logs)
 #.claude/data/*.json
+.claude/providers.json

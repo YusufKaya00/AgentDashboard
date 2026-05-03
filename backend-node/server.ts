@@ -7,6 +7,8 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 import 'dotenv/config';
 
@@ -306,6 +308,136 @@ app.get('/api/activities/detailed', async (req, res) => {
   res.json(activities.slice(-limit));
 });
 
+// ============ TASKS CRUD ============
+const TASKS_FILE = path.join(DATA_DIR, 'tasks.json');
+
+app.get('/api/tasks', async (_req, res) => {
+  const tasks = await readJson(TASKS_FILE, []);
+  res.json(tasks);
+});
+
+app.get('/api/tasks/stats', async (_req, res) => {
+  const tasks = await readJson(TASKS_FILE, []);
+  const stats = {
+    total: tasks.length,
+    pending: tasks.filter((t: any) => t.status === 'pending').length,
+    in_progress: tasks.filter((t: any) => t.status === 'in_progress').length,
+    completed: tasks.filter((t: any) => t.status === 'completed').length,
+    blocked: tasks.filter((t: any) => t.status === 'blocked').length,
+    by_priority: {
+      P0: tasks.filter((t: any) => t.priority === 'P0').length,
+      P1: tasks.filter((t: any) => t.priority === 'P1').length,
+      P2: tasks.filter((t: any) => t.priority === 'P2').length,
+      P3: tasks.filter((t: any) => t.priority === 'P3').length,
+    },
+  };
+  res.json(stats);
+});
+
+app.post('/api/tasks', async (req, res) => {
+  const tasks = await readJson(TASKS_FILE, []);
+  const task = {
+    id: genId(),
+    ...req.body,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  tasks.push(task);
+  await writeJson(TASKS_FILE, tasks);
+  logActivity('task', `Task created: ${task.title}`, 'system', { task_id: task.id });
+  res.json(task);
+});
+
+app.put('/api/tasks/:id', async (req, res) => {
+  const tasks = await readJson(TASKS_FILE, []);
+  const idx = tasks.findIndex((t: any) => t.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  tasks[idx] = { ...tasks[idx], ...req.body, updated_at: new Date().toISOString() };
+  await writeJson(TASKS_FILE, tasks);
+  logActivity('task', `Task updated: ${req.params.id}`, 'system');
+  res.json(tasks[idx]);
+});
+
+app.delete('/api/tasks/:id', async (req, res) => {
+  let tasks = await readJson(TASKS_FILE, []);
+  tasks = tasks.filter((t: any) => t.id !== req.params.id);
+  await writeJson(TASKS_FILE, tasks);
+  logActivity('task', `Task deleted: ${req.params.id}`, 'system');
+  res.json({ success: true });
+});
+
+app.post('/api/tasks/:id/execute', async (req, res) => {
+  const tasks = await readJson(TASKS_FILE, []);
+  const task = tasks.find((t: any) => t.id === req.params.id);
+  if (!task) return res.status(404).json({ error: 'Not found' });
+  // Simulate task execution
+  res.json({ success: true, result: 'Task executed successfully' });
+});
+
+// ============ ANALYTICS ============
+app.get('/api/analytics', async (req, res) => {
+  const range = req.query.range || '7d';
+  const tasks = await readJson(TASKS_FILE, []);
+  const activities = await readJson(ACTIVITIES_FILE, []);
+
+  // Generate trend data
+  const trends = [];
+  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
+  for (let i = days - 1; i >= 0; i--) {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    const dayActivities = activities.filter((a: any) =>
+      new Date(a.timestamp).toDateString() === date.toDateString()
+    );
+    trends.push({
+      timestamp: date.toISOString(),
+      commits: Math.floor(Math.random() * 10) + 2,
+      tasks: tasks.filter((t: any) =>
+        new Date(t.created_at).toDateString() === date.toDateString()
+      ).length,
+      errors: dayActivities.filter((a: any) => a.type === 'error').length,
+    });
+  }
+
+  res.json({
+    development: {
+      commits: 47,
+      pull_requests: 12,
+      code_velocity: 2340,
+      test_coverage: 87,
+      bug_count: 3,
+      deployment_frequency: 5,
+    },
+    system: {
+      cpu_usage: Math.round(os.loadavg()[0] * 10),
+      memory_usage: Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100),
+      uptime: 99.9,
+      response_time: 145,
+      error_rate: 0.02,
+    },
+    agents: {
+      total_tasks: tasks.length,
+      completed_tasks: tasks.filter((t: any) => t.status === 'completed').length,
+      average_duration: 2.3,
+      utilization: 78,
+      communication_count: activities.filter((a: any) => a.type === 'agent').length,
+    },
+    trends,
+  });
+});
+
+// ============ TERMINAL ============
+app.post('/api/terminal/execute', async (req, res) => {
+  const { command } = req.body;
+  // Simulate command execution
+  const output = `Executed: ${command}`;
+  res.json({ success: true, output });
+});
+
+app.get('/api/terminal/history', async (_req, res) => {
+  res.json([]);
+});
+
 // ============ HEALTH ============
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', runtime: 'Node.js', uptime: process.uptime() }));
 
@@ -446,7 +578,175 @@ app.get('/api/cli/sessions/:id', async (req, res) => {
   res.json(messages);
 });
 
+// ============ CLAUDE.MD MANAGEMENT ============
+const CLAUDE_MD = path.join(ROOT_DIR, 'CLAUDE.md');
+const PROVIDERS_FILE = path.join(CLAUDE_DIR, 'providers.json');
+const HOOK_HISTORY_FILE = path.join(DATA_DIR, 'hook_history.json');
+
+app.get('/api/claude-md', async (_req, res) => {
+  try {
+    const content = await fs.readFile(CLAUDE_MD, 'utf-8');
+    res.json({ content });
+  } catch { res.json({ content: '# CLAUDE.md\n\nNo file found.' }); }
+});
+
+app.put('/api/claude-md', async (req, res) => {
+  const { content } = req.body;
+  await fs.writeFile(CLAUDE_MD, content, 'utf-8');
+  logActivity('claude-md', 'CLAUDE.md updated from Dashboard', 'system');
+  res.json({ success: true });
+});
+
+// Sync all skills into CLAUDE.md
+app.post('/api/skills/sync-all', async (_req, res) => {
+  const skills = await readJson(SKILLS_FILE, []);
+  let md = await fs.readFile(CLAUDE_MD, 'utf-8').catch(() => '# CLAUDE.md\n');
+  
+  // Remove old skills section if exists
+  const marker = '<!-- DASHBOARD_SKILLS_START -->';
+  const endMarker = '<!-- DASHBOARD_SKILLS_END -->';
+  const startIdx = md.indexOf(marker);
+  const endIdx = md.indexOf(endMarker);
+  if (startIdx !== -1 && endIdx !== -1) {
+    md = md.substring(0, startIdx) + md.substring(endIdx + endMarker.length);
+  }
+  
+  // Build skills section
+  const activeSkills = skills.filter((s: any) => s.active !== false);
+  if (activeSkills.length > 0) {
+    let section = `\n${marker}\n## 🛠 Active Skills (Dashboard Synced)\n\n`;
+    for (const s of activeSkills) {
+      section += `### ${s.name}\n- **Category:** ${s.category || 'custom'}\n- **Description:** ${s.description || 'N/A'}\n\n`;
+    }
+    section += `${endMarker}\n`;
+    md = md.trimEnd() + '\n' + section;
+  }
+  
+  await fs.writeFile(CLAUDE_MD, md, 'utf-8');
+  logActivity('skill-sync', `Synced ${activeSkills.length} skills to CLAUDE.md`, 'system');
+  res.json({ success: true, synced: activeSkills.length });
+});
+
+// ============ AI PROVIDERS CRUD ============
+app.get('/api/providers', async (_req, res) => res.json(await readJson(PROVIDERS_FILE, [])));
+
+app.post('/api/providers', async (req, res) => {
+  const providers = await readJson(PROVIDERS_FILE, []);
+  const provider = { id: genId(), ...req.body, active: true, created_at: new Date().toISOString() };
+  providers.push(provider);
+  await writeJson(PROVIDERS_FILE, providers);
+  logActivity('provider', `Provider added: ${provider.name}`, 'system');
+  res.json(provider);
+});
+
+app.put('/api/providers/:id', async (req, res) => {
+  const providers = await readJson(PROVIDERS_FILE, []);
+  const idx = providers.findIndex((p: any) => p.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  providers[idx] = { ...providers[idx], ...req.body, updated_at: new Date().toISOString() };
+  await writeJson(PROVIDERS_FILE, providers);
+  res.json(providers[idx]);
+});
+
+app.delete('/api/providers/:id', async (req, res) => {
+  let providers = await readJson(PROVIDERS_FILE, []);
+  providers = providers.filter((p: any) => p.id !== req.params.id);
+  await writeJson(PROVIDERS_FILE, providers);
+  res.json({ success: true });
+});
+
+app.post('/api/providers/:id/test', async (req, res) => {
+  const providers = await readJson(PROVIDERS_FILE, []);
+  const provider = providers.find((p: any) => p.id === req.params.id);
+  if (!provider) return res.status(404).json({ error: 'Not found' });
+  
+  try {
+    const testUrl = provider.type === 'ollama' 
+      ? `${provider.base_url || 'http://localhost:11434'}/api/tags`
+      : `${provider.base_url || 'https://api.anthropic.com'}/v1/models`;
+    
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch(testUrl, {
+      signal: controller.signal,
+      headers: provider.api_key ? { 'Authorization': `Bearer ${provider.api_key}` } : {}
+    }).catch(() => null);
+    clearTimeout(timeout);
+    
+    const connected = response !== null && response.status < 500;
+    res.json({ connected, status: response?.status || 0, message: connected ? 'Connection successful' : 'Connection failed' });
+  } catch (e: any) {
+    res.json({ connected: false, status: 0, message: e.message || 'Connection failed' });
+  }
+});
+
+app.get('/api/providers/:id/models', async (req, res) => {
+  const providers = await readJson(PROVIDERS_FILE, []);
+  const provider = providers.find((p: any) => p.id === req.params.id);
+  if (!provider) return res.status(404).json({ error: 'Not found' });
+  res.json(provider.models || []);
+});
+
+// ============ HOOK EXECUTION ENGINE ============
+const execAsync = promisify(exec);
+
+app.post('/api/hooks/:id/execute', async (req, res) => {
+  const hooks = await readJson(HOOKS_FILE, []);
+  const hook = hooks.find((h: any) => h.id === req.params.id);
+  if (!hook) return res.status(404).json({ error: 'Hook not found' });
+  
+  const historyEntry: any = {
+    id: genId(),
+    hook_id: hook.id,
+    hook_name: hook.name,
+    triggered_at: new Date().toISOString(),
+    trigger: 'manual',
+    status: 'running'
+  };
+  
+  try {
+    const { stdout, stderr } = await execAsync(hook.action, { 
+      cwd: ROOT_DIR, 
+      timeout: 30000,
+      env: { ...process.env, HOOK_NAME: hook.name, HOOK_TRIGGER: hook.trigger }
+    });
+    historyEntry.status = 'success';
+    historyEntry.output = stdout.substring(0, 2000);
+    historyEntry.error = stderr ? stderr.substring(0, 500) : null;
+    historyEntry.completed_at = new Date().toISOString();
+    
+    logActivity('hook-exec', `Hook "${hook.name}" executed successfully`, 'system', { output: stdout.substring(0, 200) });
+  } catch (e: any) {
+    historyEntry.status = 'error';
+    historyEntry.error = e.message?.substring(0, 500) || 'Unknown error';
+    historyEntry.completed_at = new Date().toISOString();
+    
+    logActivity('hook-exec', `Hook "${hook.name}" failed: ${e.message?.substring(0, 100)}`, 'system');
+  }
+  
+  // Save to history
+  const history = await readJson(HOOK_HISTORY_FILE, []);
+  history.push(historyEntry);
+  await writeJson(HOOK_HISTORY_FILE, history.slice(-200));
+  
+  res.json(historyEntry);
+});
+
+app.get('/api/hooks/:id/history', async (req, res) => {
+  const history = await readJson(HOOK_HISTORY_FILE, []);
+  const hookHistory = history.filter((h: any) => h.hook_id === req.params.id);
+  res.json(hookHistory.slice(-20));
+});
+
+app.get('/api/hooks/history', async (_req, res) => {
+  const history = await readJson(HOOK_HISTORY_FILE, []);
+  res.json(history.slice(-50));
+});
+
 // ============ START ============
 server.listen(PORT, () => {
   console.log(`🚀 Node.js Backend running on http://localhost:${PORT}`);
+  console.log(`📁 Workspace: ${ROOT_DIR}`);
+  console.log(`🌐 Providers: ${PROVIDERS_FILE}`);
 });

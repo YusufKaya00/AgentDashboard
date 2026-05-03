@@ -86,159 +86,183 @@ export default function SkillManager() {
 
   const getCategoryColor = (category: string) => {
     const colors: Record<string, string> = {
-      configuration: 'bg-blue-500/10 text-blue-500 border-blue-500/30',
-      code_review: 'bg-green-500/10 text-green-500 border-green-500/30',
-      documentation: 'bg-purple-500/10 text-purple-500 border-purple-500/30',
-      security: 'bg-red-500/10 text-red-500 border-red-500/30',
-      automation: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30',
-      development: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/30',
-      custom: 'bg-zinc-500/10 text-zinc-500 border-zinc-500/30',
+      configuration: 'bg-secondary/10 text-secondary border-secondary/30',
+      code_review: 'bg-accent/10 text-accent border-accent/30',
+      documentation: 'bg-primary/10 text-primary border-primary/30',
+      security: 'bg-error/10 text-error border-error/30',
+      automation: 'bg-warning/10 text-warning border-warning/30',
+      development: 'bg-info/10 text-info border-info/30',
+      custom: 'bg-surface text-foreground-muted border-border',
     };
     return colors[category] || colors.custom;
   };
 
   if (loading) {
     return (
-      <div className="glass-card rounded-2xl p-6 border border-border">
+      <div className="card p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-4 bg-zinc-800 rounded w-1/3"></div>
-          <div className="h-8 bg-zinc-800 rounded w-1/2"></div>
+          <div className="h-4 bg-surface rounded w-1/3"></div>
+          <div className="h-8 bg-surface rounded w-1/2"></div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="glass-card rounded-2xl p-6 border border-border">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-white">Skill Manager</h2>
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="px-4 py-2 bg-primary text-black font-bold text-xs rounded hover:bg-white transition-all uppercase tracking-widest"
-          >
-            {showAddForm ? 'Cancel' : 'Add Skill'}
-          </button>
-        </div>
-
-        {stats && (
-          <div className="grid grid-cols-4 gap-4 mb-6">
-            <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800 text-center">
-              <div className="text-xl font-bold text-white">{stats.total}</div>
-              <div className="text-[10px] text-zinc-500 uppercase">Total</div>
-            </div>
-            <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800 text-center">
-              <div className="text-xl font-bold text-green-500">{stats.enabled}</div>
-              <div className="text-[10px] text-zinc-500 uppercase">Enabled</div>
-            </div>
-            <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800 text-center">
-              <div className="text-xl font-bold text-zinc-500">{stats.disabled}</div>
-              <div className="text-[10px] text-zinc-500 uppercase">Disabled</div>
-            </div>
-            <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800 text-center">
-              <div className="text-xl font-bold text-primary">{stats.categories?.custom || 0}</div>
-              <div className="text-[10px] text-zinc-500 uppercase">Custom</div>
-            </div>
+    <div className="space-y-8 animate-fade-in">
+      {/* Header Section */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-black text-white tracking-tight">Skill <span className="text-[#8e8e93] font-light">Manager</span></h2>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#d97757] animate-pulse"></span>
+            <p className="text-[10px] text-[#8e8e93] font-bold uppercase tracking-[0.2em]">Operational Capabilities</p>
           </div>
-        )}
+        </div>
+        <button
+          onClick={() => setShowAddForm(!showAddForm)}
+          className={`btn ${showAddForm ? 'btn-secondary' : 'btn-primary'}`}
+        >
+          {showAddForm ? 'Cancel' : (
+            <>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+              <span>Initialize Skill</span>
+            </>
+          )}
+        </button>
+      </div>
 
-        {showAddForm && (
-          <form onSubmit={handleAddSkill} className="mb-6 p-4 bg-zinc-900/50 rounded-lg border border-zinc-800">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs text-zinc-500 uppercase tracking-wider mb-2">Name</label>
-                <input
-                  type="text"
-                  value={newSkill.name}
-                  onChange={(e) => setNewSkill({ ...newSkill, name: e.target.value })}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-white text-sm focus:border-primary transition-all"
-                  placeholder="skill-name"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-zinc-500 uppercase tracking-wider mb-2">Description</label>
-                <textarea
-                  value={newSkill.description}
-                  onChange={(e) => setNewSkill({ ...newSkill, description: e.target.value })}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-white text-sm focus:border-primary transition-all resize-none"
-                  placeholder="What does this skill do?"
-                  rows={3}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-zinc-500 uppercase tracking-wider mb-2">Category</label>
-                <select
-                  value={newSkill.category}
-                  onChange={(e) => setNewSkill({ ...newSkill, category: e.target.value })}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded p-2 text-white text-sm focus:border-primary transition-all"
-                >
-                  <option value="custom">Custom</option>
-                  <option value="configuration">Configuration</option>
-                  <option value="code_review">Code Review</option>
-                  <option value="documentation">Documentation</option>
-                  <option value="security">Security</option>
-                  <option value="automation">Automation</option>
-                  <option value="development">Development</option>
-                </select>
-              </div>
-              <button
-                type="submit"
-                className="w-full px-4 py-2 bg-primary text-black font-bold text-xs rounded hover:bg-white transition-all uppercase tracking-widest"
-              >
-                Add Skill
-              </button>
-            </div>
-          </form>
-        )}
-
-        <div className="space-y-2">
-          {skills.map((skill) => (
-            <div
-              key={skill.id}
-              className={`p-4 rounded-lg border transition-all ${
-                skill.enabled
-                  ? 'bg-zinc-900/50 border-zinc-800'
-                  : 'bg-zinc-900/20 border-zinc-800/50 opacity-50'
-              }`}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold border ${getCategoryColor(skill.category)}`}>
-                      {skill.category}
-                    </span>
-                    <span className="text-sm font-bold text-white">{skill.name}</span>
-                  </div>
-                  <p className="text-sm text-zinc-400">{skill.description}</p>
-                  <div className="flex items-center gap-4 mt-2 text-xs text-zinc-500">
-                    <span>Used {skill.usage_count} times</span>
-                    <span>Created {new Date(skill.created_at).toLocaleDateString()}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleToggleSkill(skill.id)}
-                    className={`px-3 py-1 rounded text-xs font-bold uppercase tracking-wider transition-all ${
-                      skill.enabled
-                        ? 'bg-green-500/20 text-green-500 border border-green-500/30'
-                        : 'bg-zinc-500/20 text-zinc-500 border border-zinc-500/30'
-                    }`}
-                  >
-                    {skill.enabled ? 'ON' : 'OFF'}
-                  </button>
-                  <button
-                    onClick={() => handleDeleteSkill(skill.id)}
-                    className="px-3 py-1 rounded text-xs font-bold uppercase tracking-wider bg-red-500/20 text-red-500 border border-red-500/30 hover:bg-red-500/30 transition-all"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[
+            { label: 'Total Matrix', value: stats.total, color: 'text-white' },
+            { label: 'Active State', value: stats.enabled, color: 'text-[#00c853]' },
+            { label: 'Offline', value: stats.disabled, color: 'text-[#8e8e93]' },
+            { label: 'Custom Nodes', value: stats.categories?.custom || 0, color: 'text-[#d97757]' }
+          ].map((stat, i) => (
+            <div key={i} className="glass-card p-6 border border-white/5 relative overflow-hidden group">
+              <div className="text-2xl font-black mb-1 group-hover:scale-110 transition-transform origin-left">{stat.value}</div>
+              <div className="text-[10px] text-[#8e8e93] font-bold uppercase tracking-widest">{stat.label}</div>
+              <div className="absolute top-0 right-0 w-16 h-16 bg-white/[0.02] rounded-bl-full -mr-4 -mt-4 group-hover:bg-[#d97757]/10 transition-colors" />
             </div>
           ))}
         </div>
+      )}
+
+      {showAddForm && (
+        <form onSubmit={handleAddSkill} className="glass-card p-8 border border-[#d97757]/20 animate-scale-in">
+          <h3 className="text-xl font-bold text-white mb-6">Initialize New Capability</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-[#8e8e93] uppercase tracking-widest ml-1">Identity Name</label>
+              <input
+                type="text"
+                value={newSkill.name}
+                onChange={(e) => setNewSkill({ ...newSkill, name: e.target.value })}
+                className="input w-full"
+                placeholder="e.g. pattern-recognition"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-[#8e8e93] uppercase tracking-widest ml-1">Capability Category</label>
+              <select
+                value={newSkill.category}
+                onChange={(e) => setNewSkill({ ...newSkill, category: e.target.value })}
+                className="select w-full"
+              >
+                <option value="custom">Custom</option>
+                <option value="configuration">Configuration</option>
+                <option value="code_review">Code Review</option>
+                <option value="documentation">Documentation</option>
+                <option value="security">Security</option>
+                <option value="automation">Automation</option>
+                <option value="development">Development</option>
+              </select>
+            </div>
+            <div className="md:col-span-2 space-y-2">
+              <label className="text-[10px] font-black text-[#8e8e93] uppercase tracking-widest ml-1">Operational Description</label>
+              <textarea
+                value={newSkill.description}
+                onChange={(e) => setNewSkill({ ...newSkill, description: e.target.value })}
+                className="textarea w-full"
+                placeholder="Define the primary operational objective of this skill..."
+                rows={4}
+                required
+              />
+            </div>
+          </div>
+          <div className="flex gap-4">
+            <button type="submit" className="btn btn-primary flex-1">Register Skill Node</button>
+            <button type="button" onClick={() => setShowAddForm(false)} className="btn btn-secondary px-8">Dismiss</button>
+          </div>
+        </form>
+      )}
+
+      <div className="space-y-4">
+        {skills.map((skill) => (
+          <div
+            key={skill.id}
+            className={`glass-card p-6 flex items-center justify-between border-white/5 hover:bg-white/[0.04] transition-all group ${
+              !skill.enabled ? 'opacity-40 grayscale pointer-events-none' : ''
+            }`}
+          >
+            <div className="flex items-center gap-6 flex-1">
+              <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 group-hover:border-[#d97757]/30 group-hover:bg-[#d97757]/5 transition-all">
+                <div className="w-2 h-2 rounded-full bg-[#d97757]" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-1">
+                  <h4 className="text-lg font-bold text-white tracking-tight">{skill.name}</h4>
+                  <span className={`badge ${getCategoryColor(skill.category)}`}>
+                    {skill.category.replace('_', ' ')}
+                  </span>
+                </div>
+                <p className="text-sm text-[#8e8e93] leading-relaxed max-w-2xl">{skill.description}</p>
+                <div className="flex items-center gap-4 mt-3">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">Usage:</span>
+                    <span className="text-[10px] font-bold text-[#d97757] tabular-nums">{skill.usage_count} sessions</span>
+                  </div>
+                  <div className="w-1 h-1 rounded-full bg-white/10" />
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">Initialized:</span>
+                    <span className="text-[10px] font-bold text-[#8e8e93]">{new Date(skill.created_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-6 pl-8 border-l border-white/5">
+              <button
+                onClick={() => handleToggleSkill(skill.id)}
+                className={`switch ${skill.enabled ? 'active' : ''}`}
+                title={skill.enabled ? 'Deactivate' : 'Activate'}
+              />
+              <button
+                onClick={() => handleDeleteSkill(skill.id)}
+                className="btn btn-ghost btn-sm text-red-500/50 hover:text-red-500 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {skills.length === 0 && !loading && (
+          <div className="glass-card p-20 text-center border-dashed border-white/10">
+            <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
+              <svg className="w-10 h-10 text-white/10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">No Capability Nodes Found</h3>
+            <p className="text-sm text-[#8e8e93]">Initialize your first operational skill to begin system expansion.</p>
+          </div>
+        )}
       </div>
     </div>
   );

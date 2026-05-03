@@ -46,58 +46,49 @@ export default function AgentSummary({ refreshTrigger = 0 }: AgentSummaryProps) 
   }
 
   return (
-    <div className="glass-card rounded-2xl p-6 border border-border">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold text-white">Agent Summary</h2>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-          <span className="text-xs text-zinc-500 font-mono">LIVE</span>
-        </div>
+    <div className="glass-card p-8 border border-white/5 relative overflow-hidden group">
+      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+        <svg className="w-20 h-20 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
-          <div className="text-2xl font-bold text-white">{summary.total}</div>
-          <div className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Total Agents</div>
-        </div>
-        <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
-          <div className="text-2xl font-bold text-green-500">{summary.status.active}</div>
-          <div className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Active</div>
-        </div>
-        <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
-          <div className="text-2xl font-bold text-red-500">{summary.status.error}</div>
-          <div className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Errors</div>
-        </div>
-      </div>
-
-      <div className="space-y-4">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Models Distribution</h3>
-          <div className="space-y-2">
+          <h2 className="text-xl font-bold text-white tracking-tight">Agent Summary</h2>
+          <p className="text-[10px] text-[#8e8e93] font-bold uppercase tracking-widest mt-1">Multi-Agent State</p>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1 bg-[#00c853]/10 rounded-full border border-[#00c853]/20">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#00c853] animate-pulse"></div>
+          <span className="text-[10px] text-[#00c853] font-bold uppercase tracking-wider">Live Monitoring</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        {[
+          { label: 'Total', value: summary.total, color: 'white' },
+          { label: 'Active', value: summary.status.active, color: '#00c853' },
+          { label: 'Issues', value: summary.status.error, color: '#ff4b4b' }
+        ].map((item, i) => (
+          <div key={i} className="bg-white/5 rounded-2xl p-5 border border-white/5 flex flex-col items-center">
+            <div className="text-3xl font-black mb-1" style={{ color: item.color }}>{item.value}</div>
+            <div className="text-[10px] text-[#8e8e93] font-bold uppercase tracking-widest">{item.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-6">
+        <div>
+          <h3 className="text-[10px] font-bold text-[#8e8e93] uppercase tracking-[0.2em] mb-4">Model matrix</h3>
+          <div className="space-y-3">
             {Object.entries(summary.models).map(([model, count]) => (
-              <div key={model} className="flex items-center justify-between">
-                <span className="text-sm text-zinc-400 font-mono">{model}</span>
-                <span className="text-sm text-white font-bold">{count as number}</span>
+              <div key={model} className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 group/row hover:bg-white/10 transition-colors">
+                <span className="text-xs text-white/70 font-mono group-hover/row:text-white transition-colors">{model}</span>
+                <div className="flex items-center gap-3">
+                  <div className="px-2 py-0.5 rounded-md bg-[#d97757]/10 text-[#d97757] text-[10px] font-bold uppercase">Active</div>
+                </div>
               </div>
             ))}
-          </div>
-        </div>
-
-        <div>
-          <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Status Breakdown</h3>
-          <div className="flex gap-2">
-            <div className="flex-1 bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-center">
-              <div className="text-lg font-bold text-green-500">{summary.status.active}</div>
-              <div className="text-[10px] text-zinc-500 uppercase">Active</div>
-            </div>
-            <div className="flex-1 bg-zinc-500/10 border border-zinc-500/30 rounded-lg p-3 text-center">
-              <div className="text-lg font-bold text-zinc-500">{summary.status.inactive}</div>
-              <div className="text-[10px] text-zinc-500 uppercase">Inactive</div>
-            </div>
-            <div className="flex-1 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-center">
-              <div className="text-lg font-bold text-red-500">{summary.status.error}</div>
-              <div className="text-[10px] text-zinc-500 uppercase">Error</div>
-            </div>
           </div>
         </div>
       </div>

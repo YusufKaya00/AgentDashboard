@@ -28,10 +28,10 @@ export default function SystemStatus({ refreshTrigger = 0 }: SystemStatusProps) 
 
   if (loading) {
     return (
-      <div className="glass-card rounded-2xl p-6 border border-border">
+      <div className="card p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-4 bg-zinc-800 rounded w-1/3"></div>
-          <div className="h-8 bg-zinc-800 rounded w-1/2"></div>
+          <div className="h-4 bg-surface rounded w-1/3"></div>
+          <div className="h-8 bg-surface rounded w-1/2"></div>
         </div>
       </div>
     );
@@ -39,81 +39,84 @@ export default function SystemStatus({ refreshTrigger = 0 }: SystemStatusProps) 
 
   if (!status) {
     return (
-      <div className="glass-card rounded-2xl p-6 border border-border">
-        <p className="text-zinc-500">No system status available</p>
+      <div className="card p-6">
+        <p className="text-foreground-muted">No system status available</p>
       </div>
     );
   }
 
   return (
-    <div className="glass-card rounded-2xl p-6 border border-border">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-lg font-semibold text-white">System Status</h2>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-          <span className="text-xs text-zinc-500 font-mono">ONLINE</span>
+    <div className="glass-card p-8 border border-white/5 relative overflow-hidden group">
+      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+        <svg className="w-20 h-20 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+        </svg>
+      </div>
+
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h2 className="text-xl font-bold text-white tracking-tight">System Status</h2>
+          <p className="text-[10px] text-[#8e8e93] font-bold uppercase tracking-widest mt-1">Resource monitoring</p>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1 bg-[#00c853]/10 rounded-full border border-[#00c853]/20">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#00c853] animate-pulse"></div>
+          <span className="text-[10px] text-[#00c853] font-bold uppercase tracking-wider">Operational</span>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
-          <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1">CPU Usage</div>
-          <div className="text-2xl font-bold text-white">{status.resources.cpu_percent}%</div>
-          <div className="w-full bg-zinc-800 rounded-full h-1 mt-2">
-            <div
-              className="bg-primary h-1 rounded-full transition-all"
+      <div className="grid grid-cols-2 gap-6 mb-8">
+        <div className="space-y-3">
+          <div className="flex justify-between items-end">
+            <span className="text-[10px] text-[#8e8e93] font-bold uppercase tracking-widest">CPU LOAD</span>
+            <span className="text-lg font-black text-white">{status.resources.cpu_percent}%</span>
+          </div>
+          <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden border border-white/5 p-[2px]">
+            <div 
+              className="h-full rounded-full bg-gradient-to-r from-[#d97757] to-[#e89a7f] transition-all duration-1000 ease-out"
               style={{ width: `${status.resources.cpu_percent}%` }}
-            ></div>
+            />
           </div>
         </div>
-        <div className="bg-zinc-900/50 rounded-lg p-4 border border-zinc-800">
-          <div className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Memory Usage</div>
-          <div className="text-2xl font-bold text-white">{status.resources.memory_percent}%</div>
-          <div className="w-full bg-zinc-800 rounded-full h-1 mt-2">
-            <div
-              className="bg-primary h-1 rounded-full transition-all"
+        <div className="space-y-3">
+          <div className="flex justify-between items-end">
+            <span className="text-[10px] text-[#8e8e93] font-bold uppercase tracking-widest">MEMORY</span>
+            <span className="text-lg font-black text-white">{status.resources.memory_percent}%</span>
+          </div>
+          <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden border border-white/5 p-[2px]">
+            <div 
+              className="h-full rounded-full bg-gradient-to-r from-[#00c853] to-[#00e676] transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(0,200,83,0.3)]"
               style={{ width: `${status.resources.memory_percent}%` }}
-            ></div>
+            />
           </div>
         </div>
       </div>
 
-      <div className="space-y-4">
-        <div>
-          <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Storage Stats</h3>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800 text-center">
-              <div className="text-lg font-bold text-white">{status.storage.agents_count}</div>
-              <div className="text-[10px] text-zinc-500 uppercase">Agents</div>
-            </div>
-            <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800 text-center">
-              <div className="text-lg font-bold text-white">{status.storage.skills_count}</div>
-              <div className="text-[10px] text-zinc-500 uppercase">Skills</div>
-            </div>
-            <div className="bg-zinc-900/50 rounded-lg p-3 border border-zinc-800 text-center">
-              <div className="text-lg font-bold text-white">{status.storage.activity_count}</div>
-              <div className="text-[10px] text-zinc-500 uppercase">Activities</div>
-            </div>
+      <div className="grid grid-cols-3 gap-3 mb-8">
+        {[
+          { val: status.storage.agents_count, lab: 'Agents' },
+          { val: status.storage.skills_count, lab: 'Skills' },
+          { val: status.storage.activity_count, lab: 'Events' }
+        ].map((s, i) => (
+          <div key={i} className="bg-white/5 rounded-xl p-4 border border-white/5 text-center group/stat hover:bg-white/10 transition-colors">
+            <div className="text-xl font-black text-white group-hover/stat:text-[#d97757] transition-colors">{s.val}</div>
+            <div className="text-[10px] text-[#8e8e93] font-bold uppercase tracking-widest mt-1">{s.lab}</div>
           </div>
-        </div>
+        ))}
+      </div>
 
-        <div>
-          <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">System Info</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-zinc-500">Platform</span>
-              <span className="text-white font-mono">{status.system.platform}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-500">Python</span>
-              <span className="text-white font-mono">{status.system.python_version}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-500">Last Update</span>
-              <span className="text-white font-mono">
-                {new Date(status.timestamp).toLocaleTimeString()}
-              </span>
-            </div>
+      <div className="p-5 bg-black/20 rounded-2xl border border-white/5">
+        <div className="grid grid-cols-2 gap-y-4 gap-x-8 text-[11px]">
+          <div className="space-y-1">
+            <div className="text-[#8e8e93] font-bold uppercase tracking-widest">Platform</div>
+            <div className="text-white font-mono">{status.system.platform}</div>
+          </div>
+          <div className="space-y-1">
+            <div className="text-[#8e8e93] font-bold uppercase tracking-widest">Runtime</div>
+            <div className="text-white font-mono">Node.js {process.version}</div>
+          </div>
+          <div className="space-y-1">
+            <div className="text-[#8e8e93] font-bold uppercase tracking-widest">Last Update</div>
+            <div className="text-white font-mono">{new Date(status.timestamp).toLocaleTimeString()}</div>
           </div>
         </div>
       </div>

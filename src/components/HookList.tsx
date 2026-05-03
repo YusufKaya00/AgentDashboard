@@ -57,74 +57,91 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
   const getTypeColor = (type: string) => {
     switch (type) {
       case 'pre':
-        return 'bg-blue-500/10 text-blue-400 border-blue-500/30';
+        return 'bg-secondary/10 text-secondary border-secondary/30';
       case 'post':
-        return 'bg-green-500/10 text-green-400 border-green-500/30';
+        return 'bg-accent/10 text-accent border-accent/30';
       case 'error':
-        return 'bg-red-500/10 text-red-400 border-red-500/30';
+        return 'bg-error/10 text-error border-error/30';
       default:
-        return 'bg-zinc-500/10 text-zinc-400 border-zinc-500/30';
+        return 'bg-surface text-foreground-muted border-border';
     }
   };
 
   return (
-    <div className="space-y-4">
-      <button
-        onClick={handleCreate}
-        className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl transition-all font-medium shadow-lg shadow-orange-500/25"
-      >
-        + Create Hook
-      </button>
+    <div className="space-y-8 animate-fade-in">
+      {/* Header Section */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-black text-white tracking-tight">Hook <span className="text-[#8e8e93] font-light">Architecture</span></h2>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#d97757] animate-pulse"></span>
+            <p className="text-[10px] text-[#8e8e93] font-bold uppercase tracking-[0.2em]">Interception Layer</p>
+          </div>
+        </div>
+        <button
+          onClick={handleCreate}
+          className="btn btn-primary"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+          </svg>
+          <span>Register Hook</span>
+        </button>
+      </div>
 
       {!Array.isArray(hooks) || hooks.length === 0 ? (
-        <div className="text-center py-16 bg-zinc-900/50 rounded-2xl border border-zinc-800/50">
-          <div className="text-6xl mb-4">⚡</div>
-          <p className="text-zinc-400 text-lg">No hooks yet</p>
+        <div className="glass-card p-20 text-center border-dashed border-white/10">
+          <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-10 h-10 text-white/10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+          </div>
+          <h3 className="text-xl font-bold text-white mb-2">No Active Hooks Detected</h3>
+          <p className="text-sm text-[#8e8e93]">Configure interception hooks to monitor or modify system event flows.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {hooks.map((hook) => (
             <div
               key={hook.id}
-              className={`bg-zinc-900/50 rounded-2xl border ${
-                hook.enabled ? 'border-zinc-800/50' : 'border-zinc-800/50 opacity-60'
-              } p-6 hover:border-zinc-700/50 transition-all`}
+              className={`glass-card p-6 border-white/5 hover:bg-white/[0.04] transition-all group relative overflow-hidden ${
+                !hook.enabled ? 'opacity-40 grayscale pointer-events-none' : ''
+              }`}
             >
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-white">{hook.name}</h3>
-                  <span className={`px-3 py-1.5 text-xs font-semibold rounded-full border ${getTypeColor(hook.type)}`}>
-                    {hook.type}
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className="w-2 h-2 rounded-full bg-[#d97757]" />
+                    <h3 className="text-lg font-bold text-white tracking-tight">{hook.name}</h3>
+                  </div>
+                  <span className={`badge ${getTypeColor(hook.type || 'custom')}`}>
+                    {(hook.type || 'custom').toUpperCase()} INTERCEPTOR
                   </span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col items-end gap-3 pl-4 border-l border-white/5 ml-4">
                   <button
                     onClick={() => handleToggle(hook)}
-                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                      hook.enabled
-                        ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-                        : 'bg-zinc-800 text-zinc-500 hover:bg-zinc-700'
-                    }`}
-                  >
-                    {hook.enabled ? '✓' : '○'}
-                  </button>
+                    className={`switch ${hook.enabled ? 'active' : ''}`}
+                  />
                   <button
                     onClick={() => handleDelete(hook.id)}
-                    className="w-10 h-10 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center hover:bg-red-500/30 transition-all"
+                    className="btn btn-ghost btn-sm text-red-500/30 hover:text-red-500 hover:bg-red-500/10 transition-all"
                   >
-                    🗑️
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
                   </button>
                 </div>
               </div>
 
-              <div className="space-y-3 text-sm">
-                <div>
-                  <span className="text-zinc-500">Trigger:</span>
-                  <span className="ml-2 text-zinc-300">{hook.trigger}</span>
+              <div className="space-y-4">
+                <div className="p-3 rounded-xl bg-white/5 border border-white/5 group-hover:bg-white/10 transition-colors">
+                  <span className="text-[10px] font-black text-white/20 uppercase tracking-widest block mb-1.5">Event Trigger</span>
+                  <span className="text-[11px] text-white font-mono break-all">{hook.trigger}</span>
                 </div>
-                <div>
-                  <span className="text-zinc-500">Action:</span>
-                  <span className="ml-2 text-zinc-300">{hook.action}</span>
+                <div className="p-3 rounded-xl bg-white/5 border border-white/5 group-hover:bg-white/10 transition-colors">
+                  <span className="text-[10px] font-black text-white/20 uppercase tracking-widest block mb-1.5">Action Executable</span>
+                  <span className="text-[11px] text-[#d97757] font-mono break-all">{hook.action}</span>
                 </div>
               </div>
             </div>
@@ -133,31 +150,31 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
-          <div className="bg-zinc-900 rounded-2xl shadow-2xl max-w-md w-full mx-4 border border-zinc-800 p-8">
+        <div className="modal-overlay">
+          <div className="modal-content p-8">
             <h2 className="text-2xl font-bold mb-6 text-white">Create New Hook</h2>
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm font-semibold text-zinc-300 mb-2">
+                <label className="block text-sm font-semibold text-foreground-muted mb-2">
                   Name
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl focus:ring-2 focus:ring-orange-500 text-white placeholder-zinc-500 transition-all"
+                  className="input"
                   placeholder="Hook name"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-zinc-300 mb-2">
+                <label className="block text-sm font-semibold text-foreground-muted mb-2">
                   Type
                 </label>
                 <select
                   value={formData.type}
                   onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
-                  className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl focus:ring-2 focus:ring-orange-500 text-white transition-all"
+                  className="select"
                 >
                   <option value="pre">Pre (Before action)</option>
                   <option value="post">Post (After action)</option>
@@ -165,27 +182,27 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-semibold text-zinc-300 mb-2">
+                <label className="block text-sm font-semibold text-foreground-muted mb-2">
                   Trigger
                 </label>
                 <input
                   type="text"
                   value={formData.trigger}
                   onChange={(e) => setFormData({ ...formData, trigger: e.target.value })}
-                  className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl focus:ring-2 focus:ring-orange-500 text-white placeholder-zinc-500 transition-all"
+                  className="input"
                   placeholder="agent.request"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-zinc-300 mb-2">
+                <label className="block text-sm font-semibold text-foreground-muted mb-2">
                   Action
                 </label>
                 <input
                   type="text"
                   value={formData.action}
                   onChange={(e) => setFormData({ ...formData, action: e.target.value })}
-                  className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl focus:ring-2 focus:ring-orange-500 text-white placeholder-zinc-500 transition-all"
+                  className="input"
                   placeholder="log_request"
                   required
                 />
@@ -194,13 +211,13 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-3 border border-zinc-700 rounded-xl hover:bg-zinc-800 transition-all text-zinc-300 font-medium"
+                  className="btn btn-secondary flex-1"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl transition-all font-medium shadow-lg shadow-orange-500/25"
+                  className="btn btn-primary flex-1"
                 >
                   Create
                 </button>

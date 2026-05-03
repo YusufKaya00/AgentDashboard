@@ -1,42 +1,122 @@
 [
   {
-    "capabilities": [
-      "orchestration",
-      "planning",
-      "code-review",
-      "terminal",
-      "shell",
-      "chat",
-      "code"
-    ],
-    "config": {
-      "is_cli": true
-    },
-    "created_at": "2026-05-03T16:28:41.770104",
-    "description": "Main orchestrator and project lead using the terminal interface",
     "id": "team_leader",
-    "model": "claude-opus-4-7 (GLM 4.7)",
     "name": "Team Leader",
-    "role": "leader",
+    "description": "Main orchestrator and project lead using the terminal interface",
+    "model": "claude-3-5-sonnet",
     "status": "active",
-    "updated_at": "2026-05-03T16:56:00Z"
+    "role": "leader",
+    "capabilities": ["orchestration", "planning", "terminal", "shell", "chat", "code"],
+    "config": { "is_cli": true },
+    "created_at": "2026-05-03T16:28:41Z",
+    "updated_at": "2026-05-03T19:13:00Z"
   },
   {
-    "capabilities": [
-      "api-design",
-      "backend-integration",
-      "system-health",
-      "architecture-review",
-      "documentation"
-    ],
+    "id": "system-architect",
+    "name": "System Architect",
+    "description": "Backend architecture and API design specialist",
+    "model": "claude-3-5-sonnet",
+    "status": "active",
+    "role": "architect",
+    "capabilities": ["api-design", "backend-integration", "system-health", "architecture-review"],
     "config": {},
     "created_at": "2026-05-03T17:00:00Z",
-    "description": "Backend architecture and API design specialist",
-    "id": "system-architect",
-    "model": "claude-opus-4-7",
-    "name": "System Architect",
-    "role": "architect",
+    "updated_at": "2026-05-03T19:13:00Z"
+  },
+  {
+    "id": "frontend-dev",
+    "name": "Frontend Developer",
+    "description": "React and Next.js UI/UX specialist",
+    "model": "claude-3-5-sonnet",
     "status": "active",
-    "updated_at": "2026-05-03T17:00:00Z"
+    "role": "developer",
+    "capabilities": ["react", "nextjs", "tailwind", "framer-motion"],
+    "config": {},
+    "created_at": "2026-05-03T18:00:00Z",
+    "updated_at": "2026-05-03T19:13:00Z"
+  },
+  {
+    "id": "backend-dev",
+    "name": "Backend Developer",
+    "description": "Node.js and Database specialist",
+    "model": "claude-3-5-sonnet",
+    "status": "active",
+    "role": "developer",
+    "capabilities": ["nodejs", "express", "websocket", "fs-operations"],
+    "config": {},
+    "created_at": "2026-05-03T18:00:00Z",
+    "updated_at": "2026-05-03T19:13:00Z"
+  },
+  {
+    "id": "security-agent",
+    "name": "Security Specialist",
+    "description": "Cybersecurity and audit agent",
+    "model": "claude-3-5-sonnet",
+    "status": "active",
+    "role": "security",
+    "capabilities": ["vulnerability-scan", "auth-audit", "encryption"],
+    "config": {},
+    "created_at": "2026-05-03T18:00:00Z",
+    "updated_at": "2026-05-03T19:13:00Z"
+  },
+  {
+    "id": "qa-testing",
+    "name": "QA & Tester",
+    "description": "Automated testing and quality assurance",
+    "model": "claude-3-5-sonnet",
+    "status": "active",
+    "role": "tester",
+    "capabilities": ["vitest", "playwright", "unit-testing"],
+    "config": {},
+    "created_at": "2026-05-03T18:00:00Z",
+    "updated_at": "2026-05-03T19:13:00Z"
+  },
+  {
+    "id": "analytics",
+    "name": "Analytics Expert",
+    "description": "Data analysis and performance metrics specialist",
+    "model": "claude-3-5-sonnet",
+    "status": "active",
+    "role": "analyst",
+    "capabilities": ["data-viz", "performance-metrics", "usage-stats"],
+    "config": {},
+    "created_at": "2026-05-03T19:00:00Z",
+    "updated_at": "2026-05-03T19:13:00Z"
+  },
+  {
+    "id": "documentation",
+    "name": "Doc Master",
+    "description": "Technical documentation and guide writer",
+    "model": "claude-3-5-sonnet",
+    "status": "active",
+    "role": "writer",
+    "capabilities": ["technical-writing", "api-docs", "readme-optimization"],
+    "config": {},
+    "created_at": "2026-05-03T19:00:00Z",
+    "updated_at": "2026-05-03T19:13:00Z"
+  },
+  {
+    "id": "mobile-dev",
+    "name": "Mobile Developer",
+    "description": "React Native and Cross-platform specialist",
+    "model": "claude-3-5-sonnet",
+    "status": "active",
+    "role": "developer",
+    "capabilities": ["react-native", "expo", "ios-android-optimization"],
+    "config": {},
+    "created_at": "2026-05-03T19:00:00Z",
+    "updated_at": "2026-05-03T19:13:00Z"
+  },
+  {
+    "id": "task-manager",
+    "name": "Task Manager",
+    "description": "Workflow optimization and task delegation",
+    "model": "claude-3-5-sonnet",
+    "status": "active",
+    "role": "manager",
+    "capabilities": ["scheduling", "delegation", "priority-management"],
+    "config": {},
+    "created_at": "2026-05-03T19:00:00Z",
+    "updated_at": "2026-05-03T19:13:00Z"
   }
 ]

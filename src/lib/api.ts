@@ -112,6 +112,22 @@ export const api = {
     });
     return res.json();
   },
+  deleteTask: async (taskId: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
+      method: 'DELETE',
+    });
+    return res.json();
+  },
+  getTasksStats: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/tasks/stats`);
+    return res.json();
+  },
+
+  // Analytics
+  getAnalytics: async (range: string = '7d'): Promise<any> => {
+    const res = await fetch(`${API_BASE}/analytics?range=${range}`);
+    return res.json();
+  },
 
   // Memory
   getMemory: async (agentId: string): Promise<any[]> => {
