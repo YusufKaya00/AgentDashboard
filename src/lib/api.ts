@@ -344,6 +344,16 @@ export const api = {
     const res = await fetch(`${API_BASE}/logs/sprints?limit=${limit}`);
     return res.json();
   },
+  
+  // CLI Proxy Sessions
+  getCLISessions: async (): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/cli/sessions`);
+    return res.json();
+  },
+  getCLIMessages: async (sessionId: string): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/cli/sessions/${sessionId}`);
+    return res.json();
+  },
 };
 
 // WebSocket connection

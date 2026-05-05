@@ -12,11 +12,11 @@ export default function ActivityFeed({ activities, showAll = false }: ActivityFe
 
   const getTypeStyles = (type: string) => {
     switch (type) {
-      case 'request': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
-      case 'response': return 'bg-[var(--accent)] bg-opacity-10 text-[var(--accent)] border-[var(--accent)] border-opacity-20';
-      case 'error': return 'bg-red-500/10 text-red-400 border-red-500/20';
-      case 'hook': return 'bg-[var(--primary)] bg-opacity-10 text-[var(--primary)] border-[var(--primary)] border-opacity-20';
-      default: return 'bg-white/5 text-white/50 border-white/5';
+      case 'request': return 'bg-info/10 text-info border-info/20';
+      case 'response': return 'bg-accent/10 text-accent border-accent/20';
+      case 'error': return 'bg-error/10 text-error border-error/20';
+      case 'hook': return 'bg-primary/10 text-primary border-primary/20';
+      default: return 'bg-surface text-muted border-border';
     }
   };
 

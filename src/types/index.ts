@@ -111,3 +111,17 @@ export interface AgentCallRequest {
   task: string;
   context?: Record<string, any>;
 }
+
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  enabled: boolean;
+  version?: string;
+  language?: string;
+  file_path?: string;
+  tags?: string[];
+  usage_count?: number;
+  created_at: string;
+}

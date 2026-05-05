@@ -51,35 +51,35 @@ export default function AgentModal({ agent, onSave, onClose }: AgentModalProps) 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm">
-      <div className="bg-zinc-900 rounded-2xl shadow-2xl max-w-2xl w-full mx-4 border border-zinc-800 overflow-hidden">
-        <div className="p-8 max-h-[90vh] overflow-y-auto">
-          <h2 className="text-2xl font-bold mb-6 text-white">
-            {agent ? 'Edit Agent' : 'Create New Agent'}
+    <div className="modal-overlay">
+      <div className="modal-content max-w-2xl">
+        <div className="p-8 max-h-[90vh] overflow-y-auto custom-scrollbar">
+          <h2 className="text-2xl font-bold mb-6 text-white tracking-tight">
+            {agent ? 'Edit Agent Identity' : 'Deploy New Entity'}
           </h2>
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-zinc-300 mb-2">
-                  Name
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-muted uppercase tracking-widest ml-1">
+                  Agent Designation
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-zinc-500 transition-all"
-                  placeholder="Agent name"
+                  className="input"
+                  placeholder="Designation name"
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-zinc-300 mb-2">
-                  Model
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-muted uppercase tracking-widest ml-1">
+                  Neural Model
                 </label>
                 <select
                   value={formData.model}
                   onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                  className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white transition-all"
+                  className="select"
                 >
                   {models.map((model) => (
                     <option key={model.id} value={model.id}>
@@ -91,24 +91,24 @@ export default function AgentModal({ agent, onSave, onClose }: AgentModalProps) 
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-zinc-300 mb-2">
-                Description
+            <div className="space-y-2">
+              <label className="block text-[10px] font-black text-muted uppercase tracking-widest ml-1">
+                Mission Description
               </label>
               <input
                 type="text"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-zinc-500 transition-all"
-                placeholder="Brief description"
+                className="input"
+                placeholder="Operational parameters"
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-zinc-300 mb-2">
-                Capabilities (Skills)
+            <div className="space-y-2">
+              <label className="block text-[10px] font-black text-muted uppercase tracking-widest ml-1">
+                Acquired Capabilities (Skills)
               </label>
-              <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto p-3 bg-zinc-950 border border-zinc-700 rounded-xl">
+              <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto p-3 bg-background border border-border rounded-xl custom-scrollbar">
                 {skills.map((skill) => (
                   <label key={skill.id} className="flex items-center gap-2 cursor-pointer group">
                     <input
@@ -120,41 +120,41 @@ export default function AgentModal({ agent, onSave, onClose }: AgentModalProps) 
                           : formData.capabilities.filter((c: string) => c !== skill.name);
                         setFormData({ ...formData, capabilities: newCaps });
                       }}
-                      className="rounded border-zinc-700 text-orange-500 focus:ring-orange-500 bg-zinc-800"
+                      className="rounded border-border text-primary focus:ring-primary bg-surface"
                     />
-                    <span className="text-xs text-zinc-400 group-hover:text-white transition-colors">{skill.name}</span>
+                    <span className="text-xs text-muted group-hover:text-white transition-colors">{skill.name}</span>
                   </label>
                 ))}
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-zinc-300 mb-2 flex justify-between">
-                <span>System Prompt (Markdown)</span>
-                {loadingPrompt && <span className="text-orange-500 text-xs animate-pulse">Loading MD...</span>}
+            <div className="space-y-2">
+              <label className="block text-[10px] font-black text-muted uppercase tracking-widest ml-1 flex justify-between">
+                <span>Core System Prompt (Markdown)</span>
+                {loadingPrompt && <span className="text-primary text-[9px] animate-pulse">TRANSMITTING...</span>}
               </label>
               <textarea
                 value={formData.system_prompt}
                 onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
-                className="w-full px-4 py-3 bg-zinc-950 border border-zinc-700 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent text-white placeholder-zinc-500 font-mono text-sm transition-all"
-                rows={10}
+                className="textarea font-mono text-sm leading-relaxed"
+                rows={8}
                 placeholder="# Role Definition\n\nYou are a..."
               />
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-3 pt-4 border-t border-border">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-4 py-3 border border-zinc-700 rounded-xl hover:bg-zinc-800 transition-all text-zinc-300 font-medium"
+                className="btn btn-secondary flex-1"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-xl transition-all font-medium shadow-lg shadow-orange-500/25"
+                className="btn btn-primary flex-1"
               >
-                Save Changes
+                Authorize Changes
               </button>
             </div>
           </form>

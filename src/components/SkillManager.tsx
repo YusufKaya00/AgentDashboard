@@ -2,17 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-
-interface Skill {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  enabled: boolean;
-  config: Record<string, any>;
-  created_at: string;
-  usage_count: number;
-}
+import { Skill } from '@/types';
 
 export default function SkillManager() {
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -113,24 +103,20 @@ export default function SkillManager() {
       {/* Header Section */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-black text-white tracking-tight">Skill <span className="text-[var(--foreground-muted)] font-light">Manager</span></h2>
+          <h1 className="text-3xl font-black text-white tracking-tight">Skill <span className="text-muted font-light">Laboratory</span></h1>
           <div className="flex items-center gap-2 mt-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary)] animate-pulse"></span>
-            <p className="text-[10px] text-[var(--foreground-muted)] font-bold uppercase tracking-[0.2em]">Operational Capabilities</p>
+            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+            <p className="text-[10px] text-muted font-bold uppercase tracking-[0.2em]">Capability Matrix</p>
           </div>
         </div>
         <button
           onClick={() => setShowAddForm(!showAddForm)}
-          className={`btn ${showAddForm ? 'btn-secondary' : 'btn-primary'}`}
+          className="btn btn-primary"
         >
-          {showAddForm ? 'Cancel' : (
-            <>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-              </svg>
-              <span>Initialize Skill</span>
-            </>
-          )}
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+          </svg>
+          <span>Inject Skill</span>
         </button>
       </div>
 
@@ -144,19 +130,19 @@ export default function SkillManager() {
           ].map((stat, i) => (
             <div key={i} className="glass-card relative overflow-hidden group">
               <div className="text-2xl font-black mb-1 group-hover:scale-110 transition-transform origin-left" style={{ color: stat.color }}>{stat.value}</div>
-              <div className="text-[10px] text-[var(--foreground-muted)] font-bold uppercase tracking-widest">{stat.label}</div>
-              <div className="absolute top-0 right-0 w-16 h-16 bg-white/[0.02] rounded-bl-full -mr-4 -mt-4 group-hover:bg-[var(--primary-glow)] transition-colors" />
+              <div className="text-[10px] text-muted font-bold uppercase tracking-widest">{stat.label}</div>
+              <div className="absolute top-0 right-0 w-16 h-16 bg-white/[0.02] rounded-bl-full -mr-4 -mt-4 group-hover:bg-primary/20 transition-colors" />
             </div>
           ))}
         </div>
       )}
 
       {showAddForm && (
-        <form onSubmit={handleAddSkill} className="glass-card border-[var(--primary)] border-opacity-20 animate-fade-in">
+        <form onSubmit={handleAddSkill} className="glass-card border-primary border-opacity-20 animate-fade-in">
           <h3 className="text-xl font-bold text-white mb-6">Initialize New Capability</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-[var(--foreground-muted)] uppercase tracking-widest ml-1">Identity Name</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest ml-1">Identity Name</label>
               <input
                 type="text"
                 value={newSkill.name}
@@ -167,7 +153,7 @@ export default function SkillManager() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-[var(--foreground-muted)] uppercase tracking-widest ml-1">Capability Category</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest ml-1">Capability Category</label>
               <select
                 value={newSkill.category}
                 onChange={(e) => setNewSkill({ ...newSkill, category: e.target.value })}
@@ -183,7 +169,7 @@ export default function SkillManager() {
               </select>
             </div>
             <div className="md:col-span-2 space-y-2">
-              <label className="text-[10px] font-black text-[var(--foreground-muted)] uppercase tracking-widest ml-1">Operational Description</label>
+              <label className="text-[10px] font-black text-muted uppercase tracking-widest ml-1">Operational Description</label>
               <textarea
                 value={newSkill.description}
                 onChange={(e) => setNewSkill({ ...newSkill, description: e.target.value })}
@@ -205,32 +191,40 @@ export default function SkillManager() {
         {skills.map((skill) => (
           <div
             key={skill.id}
-            className={`glass-card flex items-center justify-between group ${
+            className={`glass-card flex items-start justify-between group ${
               !skill.enabled ? 'opacity-40 grayscale pointer-events-none' : ''
             }`}
           >
-            <div className="flex items-center gap-6 flex-1">
-              <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 group-hover:border-[var(--primary)] group-hover:bg-[var(--primary-glow)] transition-all">
-                <div className="w-2 h-2 rounded-full bg-[var(--primary)]" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-1">
-                  <h4 className="text-lg font-bold text-white tracking-tight">{skill.name}</h4>
-                  <span className={`badge ${getCategoryColor(skill.category)}`}>
-                    {skill.category.replace('_', ' ')}
-                  </span>
+            <div className="flex flex-col flex-1 gap-4">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 group-hover:border-primary group-hover:bg-primary/10 transition-all">
+                    <span className="text-xl">🛠️</span>
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-bold text-white tracking-tight">{skill.name}</h4>
+                    <span className="text-xs text-secondary">{skill.category}</span>
+                  </div>
                 </div>
-                <p className="text-sm text-[var(--foreground-muted)] leading-relaxed max-w-2xl">{skill.description}</p>
-                <div className="flex items-center gap-4 mt-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">Usage:</span>
-                    <span className="text-[10px] font-bold text-[var(--primary)] tabular-nums">{skill.usage_count} sessions</span>
-                  </div>
-                  <div className="w-1 h-1 rounded-full bg-white/10" />
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-black text-white/20 uppercase tracking-widest">Initialized:</span>
-                    <span className="text-[10px] font-bold text-[var(--foreground-muted)]">{new Date(skill.created_at).toLocaleDateString()}</span>
-                  </div>
+                <div className="flex flex-col items-end gap-1">
+                  <span className="px-2 py-0.5 rounded-md bg-accent/10 border border-accent/20 text-[9px] font-black text-accent uppercase tracking-wider">
+                    {skill.version || 'v1.0'}
+                  </span>
+                  <span className="text-[9px] text-muted font-mono">{skill.language || 'typescript'}</span>
+                </div>
+              </div>
+              <p className="text-sm text-muted leading-relaxed max-w-2xl">{skill.description}</p>
+              <div className="flex items-center gap-4 mt-3">
+                <div className="p-3 rounded-xl bg-surface border border-border group-hover:bg-white/5 transition-colors">
+                  <span className="text-[10px] font-black text-white/20 uppercase tracking-widest block mb-1">Entry Point</span>
+                  <span className="text-[11px] text-white font-mono break-all">{skill.file_path || 'src/skills/default.ts'}</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {skill.tags?.map((tag: string) => (
+                    <span key={tag} className="px-2 py-0.5 rounded-md bg-secondary/10 border border-secondary/20 text-[9px] font-bold text-secondary uppercase tracking-tighter">
+                      {tag}
+                    </span>
+                  ))}
                 </div>
               </div>
             </div>
@@ -259,8 +253,8 @@ export default function SkillManager() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">No Capability Nodes Found</h3>
-            <p className="text-sm text-[var(--foreground-muted)]">Initialize your first operational skill to begin system expansion.</p>
+            <h3 className="text-xl font-bold text-white mb-2">No Skills Injected</h3>
+            <p className="text-sm text-muted">Register a new capability to expand your agents' operational range.</p>
           </div>
         )}
       </div>

@@ -87,11 +87,11 @@ export default function Home() {
   const PageHeader = ({ title, subtitle, accent = "Intelligence" }: { title: string, subtitle: string, accent?: string }) => (
     <div className="mb-8">
       <div className="flex items-center gap-2 mb-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#d97757] animate-pulse" />
-        <span className="text-[10px] font-black text-[#d97757] uppercase tracking-[0.3em]">System {accent}</span>
+        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+        <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">System {accent}</span>
       </div>
       <h1 className="text-3xl font-black text-white tracking-tight">
-        {title} <span className="text-[#8e8e93] font-light">{subtitle}</span>
+        {title} <span className="text-muted font-light">{subtitle}</span>
       </h1>
     </div>
   );
@@ -103,11 +103,11 @@ export default function Home() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="w-2 h-2 rounded-full bg-[var(--primary)] animate-pulse" />
-                <span className="text-[10px] font-black text-[var(--primary)] uppercase tracking-[0.3em]">System Intelligence</span>
+                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">System Intelligence</span>
               </div>
               <h1 className="text-3xl font-black text-white tracking-tight">
-                Dashboard <span className="text-[var(--foreground-muted)] font-light">Overview</span>
+                Dashboard <span className="text-muted font-light">Overview</span>
               </h1>
             </div>
             <div className="flex items-center gap-4 bg-white/5 p-2 rounded-2xl border border-white/5">

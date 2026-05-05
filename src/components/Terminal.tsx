@@ -349,7 +349,7 @@ System Metrics:
       {/* Terminal Window */}
       <div className="card flex-1 flex flex-col overflow-hidden">
         {/* Tabs */}
-        <div className="flex items-center gap-1 p-2 border-b border-border bg-background-light">
+        <div className="flex items-center gap-1 p-2 border-b border-border" style={{ backgroundColor: 'var(--background-alt)' }}>
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -411,7 +411,7 @@ System Metrics:
         </div>
 
         {/* Input */}
-        <div className="p-4 border-t border-border bg-background-light">
+        <div className="p-4 border-t border-border" style={{ backgroundColor: 'var(--background-alt)' }}>
           <div className="flex items-center gap-3">
             <span className="text-primary font-mono">❯</span>
             <input

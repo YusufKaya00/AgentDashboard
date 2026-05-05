@@ -1,195 +1,198 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { api } from '@/lib/api';
 
-interface Session {
+interface CLIMessage {
   id: string;
-  title: string;
-  timestamp: string;
-  message_count: number;
-  file_size: number;
-}
-
-interface Message {
-  id: string;
-  type: string;
-  role: string;
+  role: 'user' | 'assistant';
   content: string;
+  model?: string;
   timestamp: string;
   tools?: string[];
-  model?: string;
+  type?: string;
 }
 
-const API_BASE = 'http://localhost:8000/api';
+interface CLISession {
+  id: string;
+  title: string;
+  message_count: number;
+  timestamp: string;
+  file_size: number;
+  pid?: number;
+  cwd?: string;
+}
 
 export default function CLISessions() {
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [sessions, setSessions] = useState<CLISession[]>([]);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<CLIMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
 
   useEffect(() => {
     loadSessions();
-    const interval = setInterval(loadSessions, 10000);
-    return () => clearInterval(interval);
   }, []);
 
   const loadSessions = async () => {
     try {
-      const res = await fetch(`${API_BASE}/cli/sessions`);
-      const data = await res.json();
+      const data = await api.getCLISessions();
       setSessions(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to load sessions:', err);
+    } catch (error) {
+      console.error('Error loading sessions:', error);
     } finally {
       setLoading(false);
     }
   };
 
   const loadMessages = async (sessionId: string) => {
-    setSelectedSession(sessionId);
     setMessagesLoading(true);
+    setSelectedSession(sessionId);
     try {
-      const res = await fetch(`${API_BASE}/cli/sessions/${sessionId}`);
-      const data = await res.json();
+      const data = await api.getCLIMessages(sessionId);
       setMessages(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to load messages:', err);
+    } catch (error) {
+      console.error('Error loading messages:', error);
     } finally {
       setMessagesLoading(false);
     }
   };
 
-  const formatTime = (ts: string) => {
-    try {
-      const d = new Date(ts);
-      if (isNaN(d.getTime())) return '';
-      return d.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    } catch { return ''; }
+  const formatTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / 1048576).toFixed(1)} MB`;
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  return (
-    <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-4xl font-black text-white mb-2 tracking-tight">CLI <span className="text-[var(--foreground-muted)] font-light">Sessions</span></h1>
-        <p className="text-[var(--foreground-muted)] font-mono text-[10px] uppercase tracking-[0.3em]">
-          Live transcript of all Claude CLI conversations
-        </p>
+  if (loading) {
+    return (
+      <div className="card p-12 text-center animate-pulse">
+        <div className="text-muted uppercase tracking-[0.4em] font-black">Syncing with CLI Proxy...</div>
       </div>
+    );
+  }
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Session List */}
-        <div className="lg:col-span-1 space-y-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-[10px] font-black text-[var(--foreground-muted)] uppercase tracking-widest">Sessions ({sessions.length})</h2>
-            <button onClick={loadSessions} className="text-[10px] font-bold text-[var(--primary)] hover:text-[var(--primary-glow)] transition-colors uppercase tracking-widest">↻ Refresh</button>
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
+      {/* Session List */}
+      <div className="lg:col-span-1 space-y-6">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h2 className="text-2xl font-black text-white tracking-tight">CLI <span className="text-muted font-light">History</span></h2>
+            <p className="text-[10px] text-muted font-bold uppercase tracking-widest mt-1">Matrix Logs</p>
           </div>
-
-          {loading ? (
-            <div className="text-center py-12 text-[var(--foreground-muted)] animate-pulse font-bold uppercase tracking-widest text-[10px]">Synchronizing...</div>
-          ) : sessions.length === 0 ? (
-            <div className="glass-card p-12 text-center border-dashed">
-              <div className="text-4xl mb-4 opacity-20">📭</div>
-              <p className="text-[var(--foreground-muted)] text-sm font-bold uppercase tracking-widest">No sessions found</p>
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
-              {sessions.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => loadMessages(s.id)}
-                  className={`w-full text-left p-5 rounded-2xl border transition-all duration-300 group ${
-                    selectedSession === s.id
-                      ? 'bg-[var(--primary)] bg-opacity-10 border-[var(--primary)] border-opacity-30 shadow-[0_0_20px_var(--primary-glow)]'
-                      : 'bg-white/5 border-white/5 hover:border-white/10 hover:bg-white/10'
-                  }`}
-                >
-                  <p className="text-sm text-white truncate font-bold tracking-tight mb-2 group-hover:text-[var(--primary)] transition-colors">{s.title || 'Unnamed Session'}</p>
-                  <div className="flex items-center gap-3 text-[10px] text-[var(--foreground-muted)] font-bold uppercase tracking-widest opacity-60">
-                    <span>{formatTime(s.timestamp)}</span>
-                    <span className="w-1 h-1 rounded-full bg-white/20" />
-                    <span>{s.message_count} msgs</span>
-                    <span className="w-1 h-1 rounded-full bg-white/20" />
-                    <span>{formatSize(s.file_size)}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+          <button onClick={loadSessions} className="btn btn-secondary btn-sm p-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
         </div>
 
-        {/* Message View */}
-        <div className="lg:col-span-2">
-          {!selectedSession ? (
-            <div className="glass-card p-20 text-center border-dashed border-white/10">
-              <div className="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-8">
-                <div className="text-5xl opacity-20">💬</div>
-              </div>
-              <h3 className="text-xl font-bold text-white mb-2">Neural Link Ready</h3>
-              <p className="text-sm text-[var(--foreground-muted)]">Select a session from the matrix to decode conversation data.</p>
-            </div>
-          ) : messagesLoading ? (
-            <div className="glass-card p-20 text-center">
-              <div className="animate-pulse space-y-4">
-                <div className="w-16 h-1 bg-[var(--primary)] rounded-full mx-auto" />
-                <p className="text-[10px] font-black text-[var(--foreground-muted)] uppercase tracking-[0.3em]">Decoding Transmission...</p>
-              </div>
+        <div className="space-y-3 max-h-[75vh] overflow-y-auto pr-2 custom-scrollbar">
+          {sessions.length === 0 ? (
+            <div className="card p-10 text-center border-dashed border-border">
+              <p className="text-muted text-xs font-bold uppercase">No sessions detected</p>
             </div>
           ) : (
-            <div className="glass-card overflow-hidden p-0 border-white/10">
-              <div className="p-5 border-b border-white/5 bg-white/5 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse" />
-                  <h3 className="text-[10px] font-black text-white uppercase tracking-widest">{messages.length} Data Blocks</h3>
+            sessions.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => loadMessages(s.id)}
+                className={`w-full text-left p-4 rounded-xl border transition-all duration-300 group ${
+                  selectedSession === s.id
+                    ? 'bg-primary/10 border-primary/40 shadow-[0_0_15px_rgba(var(--primary-rgb),0.1)]'
+                    : 'bg-surface border-border hover:border-primary/20 hover:bg-white/5'
+                }`}
+              >
+                <p className="text-sm text-white truncate font-bold tracking-tight mb-1 group-hover:text-primary transition-colors">
+                  {s.title || 'Session Link ' + s.id.substring(0, 4)}
+                </p>
+                <div className="flex items-center gap-3 text-[9px] text-muted font-bold uppercase tracking-widest opacity-70">
+                  <span>{formatTime(s.timestamp)}</span>
+                  <span className="w-1 h-1 rounded-full bg-white/10" />
+                  <span>{s.message_count} blocks</span>
                 </div>
-                <span className="text-[10px] text-[var(--foreground-muted)] font-mono bg-black/40 px-3 py-1 rounded-lg border border-white/5">{selectedSession?.substring(0, 12)}</span>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Message View */}
+      <div className="lg:col-span-2">
+        {!selectedSession ? (
+          <div className="card p-20 text-center border-dashed border-border h-full flex flex-col items-center justify-center">
+            <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mb-6">
+              <div className="text-4xl opacity-20">📡</div>
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">Neural Interface Ready</h3>
+            <p className="text-sm text-muted">Select a data stream from the matrix to begin decryption.</p>
+          </div>
+        ) : messagesLoading ? (
+          <div className="card p-20 text-center flex flex-col items-center justify-center h-full">
+            <div className="animate-pulse space-y-4">
+              <div className="w-16 h-1 bg-primary rounded-full mx-auto" />
+              <p className="text-[10px] font-black text-muted uppercase tracking-[0.3em]">Decoding Transmission...</p>
+            </div>
+          </div>
+        ) : (
+          <div className="card overflow-hidden p-0 border-border flex flex-col h-full bg-surface">
+            <div className="p-4 border-b border-border bg-background/50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                <h3 className="text-[10px] font-black text-white uppercase tracking-widest">{messages.length} Packets Received</h3>
               </div>
-              <div className="max-h-[65vh] overflow-y-auto p-6 space-y-6 custom-scrollbar">
-                {messages.filter(m => m.type !== 'tool_result').map((msg) => (
+              <span className="text-[9px] text-muted font-mono bg-black/40 px-3 py-1 rounded-lg border border-border">UID: {selectedSession.substring(0, 8)}</span>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar max-h-[70vh]">
+              {messages.length === 0 ? (
+                <p className="text-center text-muted text-xs py-20">NO DATA PACKETS IN THIS STREAM</p>
+              ) : (
+                messages.filter(m => m.type !== 'tool_result').map((msg) => (
                   <div
                     key={msg.id}
                     className={`relative p-5 rounded-2xl border transition-all ${
                       msg.role === 'user'
-                        ? 'bg-[var(--primary)] bg-opacity-5 border-[var(--primary)] border-opacity-10 ml-12'
-                        : 'bg-white/5 border-white/5 mr-12'
+                        ? 'bg-primary/5 border-primary/20 ml-8'
+                        : 'bg-background border-border mr-8'
                     }`}
                   >
                     <div className="flex items-center gap-3 mb-4">
-                      <span className={`text-[10px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded ${
-                        msg.role === 'user' ? 'bg-[var(--primary)] bg-opacity-10 text-[var(--primary)]' : 'bg-[var(--accent)] bg-opacity-10 text-[var(--accent)]'
+                      <span className={`text-[9px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded ${
+                        msg.role === 'user' ? 'bg-primary/20 text-primary' : 'bg-accent/20 text-accent'
                       }`}>
                         {msg.role === 'user' ? 'Operator' : 'AI Agent'}
                       </span>
                       {msg.model && (
-                        <span className="text-[9px] text-[var(--foreground-muted)] font-mono opacity-50">{msg.model}</span>
+                        <span className="text-[9px] text-muted font-mono opacity-50">{msg.model}</span>
                       )}
-                      <span className="text-[9px] text-[var(--foreground-muted)] font-bold ml-auto opacity-40">{formatTime(msg.timestamp)}</span>
+                      <span className="text-[9px] text-muted font-bold ml-auto opacity-40">{formatTime(msg.timestamp)}</span>
                     </div>
                     <div className="text-sm text-white/90 whitespace-pre-wrap break-words leading-relaxed font-medium">
-                      {msg.content.length > 5000 ? msg.content.substring(0, 5000) + '...' : msg.content}
+                      {msg.content}
                     </div>
                     {msg.tools && msg.tools.length > 0 && (
-                      <div className="mt-4 flex flex-wrap gap-2 pt-4 border-t border-white/5">
+                      <div className="mt-4 flex flex-wrap gap-2 pt-4 border-t border-border">
                         {msg.tools.map((tool, i) => (
-                          <span key={i} className="text-[9px] px-3 py-1 bg-white/5 text-white/60 border border-white/10 rounded-lg font-bold uppercase tracking-widest">
+                          <span key={i} className="text-[9px] px-2 py-1 bg-surface text-muted border border-border rounded-lg font-bold uppercase tracking-widest">
                             ⚡ {tool}
                           </span>
                         ))}
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
+                ))
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

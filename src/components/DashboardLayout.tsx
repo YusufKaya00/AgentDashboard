@@ -34,29 +34,27 @@ export default function DashboardLayout({ children, activeTab, onTabChange }: Da
   return (
     <div className="dashboard-container">
       {/* Background Glows */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-[var(--primary)] opacity-5 blur-[160px] rounded-full" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-[var(--accent)] opacity-5 blur-[140px] rounded-full" />
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-primary opacity-5 blur-[160px] rounded-full" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-accent opacity-5 blur-[140px] rounded-full" />
       </div>
 
-      {/* FIXED Sidebar via CSS Flex/Grid container */}
+      {/* Sidebar */}
       <aside className="sidebar">
-        {/* Modern Branding Area */}
         <div className="sidebar-header">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-[var(--primary)] to-[#c4603e] rounded-2xl flex items-center justify-center shadow-lg shadow-[var(--primary-glow)]">
+            <div className="w-12 h-12 bg-gradient-to-br from-primary to-[#c4603e] rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
               <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tight text-white leading-none">Claude</h1>
-              <p className="text-[10px] text-[var(--foreground-muted)] font-bold uppercase tracking-[0.2em] mt-1.5 opacity-60">Control Panel</p>
+              <h1 className="text-xl font-black tracking-tight text-white leading-none uppercase">Claude</h1>
+              <p className="text-[10px] text-muted font-black uppercase tracking-[0.2em] mt-1.5">Control Panel</p>
             </div>
           </div>
         </div>
 
-        {/* Scrollable Navigation */}
         <nav className="sidebar-nav custom-scrollbar space-y-1">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;
@@ -66,7 +64,7 @@ export default function DashboardLayout({ children, activeTab, onTabChange }: Da
                 onClick={() => onTabChange(tab.id)}
                 className={`nav-button group ${isActive ? 'active' : ''}`}
               >
-                <div className={`${isActive ? 'text-[var(--primary)]' : 'text-white/20 group-hover:text-white/50 transition-colors'}`}>
+                <div className={`${isActive ? 'text-primary' : 'text-white/20 group-hover:text-white/50 transition-colors'}`}>
                   <Icon d={tab.icon} />
                 </div>
                 <span className={`text-sm font-bold tracking-wide transition-transform ${isActive ? 'translate-x-1' : ''}`}>
@@ -77,7 +75,6 @@ export default function DashboardLayout({ children, activeTab, onTabChange }: Da
           })}
         </nav>
 
-        {/* Sidebar Footer */}
         <div className="p-6 mt-auto border-t border-white/[0.03]">
           <div className="p-4 bg-white/[0.02] rounded-2xl border border-white/[0.05] flex items-center gap-4 hover:bg-white/[0.05] transition-colors cursor-pointer">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-white/10 to-white/5 flex items-center justify-center text-xs font-bold text-white/30">
@@ -85,8 +82,8 @@ export default function DashboardLayout({ children, activeTab, onTabChange }: Da
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-xs font-bold text-white truncate">Main Session</div>
-              <div className="text-[10px] text-[var(--accent)] flex items-center gap-2 font-bold uppercase tracking-wider mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
+              <div className="text-[10px] text-accent flex items-center gap-2 font-bold uppercase tracking-wider mt-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
                 Live
               </div>
             </div>

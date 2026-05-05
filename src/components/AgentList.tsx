@@ -71,10 +71,10 @@ export default function AgentList({ agents, onRefresh, showAll = false }: AgentL
       {/* Header Section */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-black text-white tracking-tight">Agent <span className="text-[var(--foreground-muted)] font-light">Nodes</span></h2>
+          <h1 className="text-3xl font-black text-white tracking-tight">Agent <span className="text-muted font-light">Fleet</span></h1>
           <div className="flex items-center gap-2 mt-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse"></span>
-            <p className="text-[10px] text-[var(--foreground-muted)] font-bold uppercase tracking-[0.2em]">Active Neural Network</p>
+            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
+            <p className="text-[10px] text-muted font-bold uppercase tracking-[0.2em]">Autonomous Entity Matrix</p>
           </div>
         </div>
         {showAll && (
@@ -85,20 +85,20 @@ export default function AgentList({ agents, onRefresh, showAll = false }: AgentL
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
             </svg>
-            <span>Deploy New Agent</span>
+            <span>Deploy Agent</span>
           </button>
         )}
       </div>
 
       {displayAgents.length === 0 ? (
-        <div className="glass-card p-20 text-center border-dashed border-white/10">
-          <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-10 h-10 text-white/10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+        <div className="glass-card p-20 text-center border-dashed border-border">
+          <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-10 h-10 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
             </svg>
           </div>
-          <h3 className="text-xl font-bold text-white mb-2">No Active Nodes Detected</h3>
-          <p className="text-sm text-[var(--foreground-muted)]">The neural network is currently dormant. Deploy an agent to begin operations.</p>
+          <h3 className="text-xl font-bold text-white mb-2">No Agents Deployed</h3>
+          <p className="text-sm text-muted">Initialize your first autonomous agent to begin operations.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -110,25 +110,25 @@ export default function AgentList({ agents, onRefresh, showAll = false }: AgentL
               }`}
             >
               <div className="flex items-start justify-between mb-6">
-                <div className="w-12 h-12 rounded-2xl bg-[var(--primary-glow)] flex items-center justify-center border border-[var(--primary)] border-opacity-20 group-hover:scale-110 transition-transform">
+                <div className="w-12 h-12 rounded-2xl bg-surface flex items-center justify-center border border-border group-hover:border-primary group-hover:bg-primary/10 transition-all">
                   <span className="text-xl">🤖</span>
                 </div>
-                <div className={`badge ${getStatusColor(agent.status)}`}>
-                  {agent.status}
+                <div className="flex flex-col items-end gap-1">
+                  <span className={`px-2 py-0.5 rounded-md border text-[9px] font-black uppercase tracking-wider ${
+                    agent.status === 'active' ? 'bg-accent/10 text-accent border-accent/20' : 'bg-surface text-muted border-border'
+                  }`}>
+                    {agent.status}
+                  </span>
+                  <span className="text-[9px] text-muted font-mono">{agent.model.split('-').slice(0, 2).join('-')}</span>
                 </div>
               </div>
 
               <div className="flex-1">
-                <h3 className="text-xl font-bold text-white mb-2 tracking-tight group-hover:text-[var(--primary)] transition-colors">{agent.name}</h3>
-                <p className="text-xs text-[var(--foreground-muted)] leading-relaxed mb-4 line-clamp-2">{agent.description}</p>
+                <h3 className="text-xl font-bold text-white mb-2 tracking-tight group-hover:text-primary transition-colors">{agent.name}</h3>
+                <p className="text-xs text-muted leading-relaxed mb-4 line-clamp-2">{agent.description}</p>
                 
                 <div className="space-y-4 mb-6">
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-[9px] font-black text-white/20 uppercase tracking-widest">Model Matrix</span>
-                    <span className="text-[11px] font-mono font-bold text-[var(--primary)]">{agent.model}</span>
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-2">
                     {agent.capabilities?.map((cap, idx) => (
                       <span key={idx} className="px-2 py-0.5 rounded-md bg-white/5 border border-white/5 text-[9px] font-bold text-white/60 group-hover:text-white transition-colors">
                         {cap}

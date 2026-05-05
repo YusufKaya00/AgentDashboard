@@ -11,15 +11,24 @@ interface ModelListProps {
 
 export default function ModelList({ models, onRefresh }: ModelListProps) {
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    id: string;
+    name: string;
+    provider: string;
+    api_endpoint: string;
+    api_key: string;
+    model_id: string;
+    capabilities: string[];
+  }>({
     id: '',
     name: '',
-    provider: 'custom' as const,
+    provider: 'custom',
     api_endpoint: '',
     api_key: '',
     model_id: '',
-    capabilities: [] as string[],
+    capabilities: [],
   });
+
   const [isEditing, setIsEditing] = useState(false);
 
   const handleCreate = () => {
@@ -38,7 +47,12 @@ export default function ModelList({ models, onRefresh }: ModelListProps) {
 
   const handleEdit = (model: AIModel) => {
     setFormData({
-      ...model,
+      id: model.id,
+      name: model.name,
+      provider: model.provider,
+      api_endpoint: model.api_endpoint ?? '',
+      api_key: model.api_key ?? '',
+      model_id: model.model_id,
       capabilities: Array.isArray(model.capabilities) ? model.capabilities : [],
     });
     setIsEditing(true);

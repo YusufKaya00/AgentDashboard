@@ -128,16 +128,11 @@ export default function TaskManager() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending':
-        return 'bg-zinc-500/10 text-zinc-500 border-zinc-500/30';
-      case 'in_progress':
-        return 'bg-blue-500/10 text-blue-500 border-blue-500/30';
-      case 'completed':
-        return 'bg-green-500/10 text-green-500 border-green-500/30';
-      case 'blocked':
-        return 'bg-red-500/10 text-red-500 border-red-500/30';
-      default:
-        return 'bg-zinc-500/10 text-zinc-500 border-zinc-500/30';
+      case 'pending': return 'bg-surface text-muted border-border';
+      case 'in_progress': return 'bg-info/10 text-info border-info/20';
+      case 'completed': return 'bg-accent/10 text-accent border-accent/20';
+      case 'blocked': return 'bg-error/10 text-error border-error/20';
+      default: return 'bg-surface text-muted border-border';
     }
   };
 
@@ -152,11 +147,11 @@ export default function TaskManager() {
 
   if (loading) {
     return (
-      <div className="glass-card rounded-2xl p-8">
+      <div className="card p-8 border border-border">
         <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-zinc-800 rounded w-1/3"></div>
-          <div className="h-4 bg-zinc-800 rounded w-1/2"></div>
-          <div className="h-32 bg-zinc-800 rounded"></div>
+          <div className="h-8 bg-surface rounded w-1/3"></div>
+          <div className="h-4 bg-surface rounded w-1/2"></div>
+          <div className="h-32 bg-surface rounded"></div>
         </div>
       </div>
     );
@@ -184,29 +179,29 @@ export default function TaskManager() {
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          <div className="glass-card-sm p-4 text-center">
-            <div className="text-2xl font-bold text-white">{stats.total}</div>
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Total</div>
+          <div className="card-sm p-4 bg-surface text-center">
+            <div className="text-2xl font-black text-white">{stats.total}</div>
+            <div className="text-[10px] text-muted uppercase tracking-widest mt-1">Total</div>
           </div>
-          <div className="glass-card-sm p-4 text-center">
-            <div className="text-2xl font-bold text-zinc-500">{stats.pending}</div>
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Pending</div>
+          <div className="card-sm p-4 bg-surface text-center">
+            <div className="text-2xl font-black text-muted">{stats.pending}</div>
+            <div className="text-[10px] text-muted uppercase tracking-widest mt-1">Pending</div>
           </div>
-          <div className="glass-card-sm p-4 text-center">
-            <div className="text-2xl font-bold text-blue-500">{stats.in_progress}</div>
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">In Progress</div>
+          <div className="card-sm p-4 bg-surface text-center">
+            <div className="text-2xl font-black text-info">{stats.in_progress}</div>
+            <div className="text-[10px] text-muted uppercase tracking-widest mt-1">Active</div>
           </div>
-          <div className="glass-card-sm p-4 text-center">
-            <div className="text-2xl font-bold text-green-500">{stats.completed}</div>
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Completed</div>
+          <div className="card-sm p-4 bg-surface text-center">
+            <div className="text-2xl font-black text-accent">{stats.completed}</div>
+            <div className="text-[10px] text-muted uppercase tracking-widest mt-1">Done</div>
           </div>
-          <div className="glass-card-sm p-4 text-center">
-            <div className="text-2xl font-bold text-red-500">{stats.blocked}</div>
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Blocked</div>
+          <div className="card-sm p-4 bg-surface text-center">
+            <div className="text-2xl font-black text-error">{stats.blocked}</div>
+            <div className="text-[10px] text-muted uppercase tracking-widest mt-1">Blocked</div>
           </div>
-          <div className="glass-card-sm p-4 text-center">
-            <div className="text-2xl font-bold text-orange-500">{stats.by_priority.P0}</div>
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">P0 Critical</div>
+          <div className="card-sm p-4 bg-surface text-center">
+            <div className="text-2xl font-black text-primary">{stats.by_priority.P0}</div>
+            <div className="text-[10px] text-muted uppercase tracking-widest mt-1">Critical</div>
           </div>
         </div>
       )}
@@ -275,11 +270,11 @@ export default function TaskManager() {
                       {task.status.replace('_', ' ')}
                     </span>
                   </div>
-                  <p className="text-xs text-zinc-400 mb-3 line-clamp-2">{task.description}</p>
-                  <div className="flex items-center gap-4 text-[10px] text-zinc-500">
-                    <span>Assigned to: {task.assigned_to}</span>
-                    <span>Est: {task.estimated_hours}h</span>
-                    <span>Created: {new Date(task.created_at).toLocaleDateString()}</span>
+                  <p className="text-xs text-muted mb-3 line-clamp-2">{task.description}</p>
+                  <div className="flex items-center gap-4 text-[10px] text-muted font-bold uppercase tracking-wider">
+                    <span>👤 {task.assigned_to}</span>
+                    <span>⏱️ {task.estimated_hours}h</span>
+                    <span>📅 {new Date(task.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>
 
