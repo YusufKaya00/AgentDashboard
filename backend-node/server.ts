@@ -126,58 +126,128 @@ app.get('/api/system/status', async (_req, res) => {
 });
 
 // ============ AGENTS ============
-app.get('/api/agents/summary', async (_req, res) => {
+const AGENTS_METADATA_FILE = path.join(DATA_DIR, 'agents.json');
+
+// Initialize agents.json from .md files if needed
+const initAgents = async () => {
+  const agents = await readJson(AGENTS_METADATA_FILE, []);
   const agentFiles = (await fs.readdir(AGENTS_DIR).catch(() => [])).filter((f: string) => f.endsWith('.md'));
-  res.json({ 
-    total: agentFiles.length,
-    status: {
-      active: agentFiles.length, 
-      inactive: 0,
-      error: 0
-    },
-    models: {
-      "claude-opus-4-7": agentFiles.length
+  
+  let changed = false;
+  for (const f of agentFiles) {
+    const id = f.replace('.md', '');
+    if (!agents.find((a: any) => a.id === id)) {
+      agents.push({
+        id,
+        name: id.split(/[-_]/).map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join(' '),
+        description: 'Auto-imported from markdown',
+        model: 'claude-3-5-sonnet-20241022',
+        status: 'active',
+        role: 'agent',
+        capabilities: ['code', 'analysis'],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        config: {}
+      });
+      changed = true;
     }
+  }
+  if (changed) await writeJson(AGENTS_METADATA_FILE, agents);
+};
+initAgents();
+
+app.get('/api/agents/summary', async (_req, res) => {
+  const agents = await readJson(AGENTS_METADATA_FILE, []);
+  res.json({ 
+    total: agents.length,
+    status: {
+      active: agents.filter((a: any) => a.status === 'active').length, 
+      inactive: agents.filter((a: any) => a.status !== 'active' && a.status !== 'error').length,
+      error: agents.filter((a: any) => a.status === 'error').length
+    },
+    models: agents.reduce((acc: any, a: any) => {
+      acc[a.model] = (acc[a.model] || 0) + 1;
+      return acc;
+    }, {})
   });
 });
 
 app.get('/api/agents', async (_req, res) => {
-  const agentFiles = (await fs.readdir(AGENTS_DIR).catch(() => [])).filter((f: string) => f.endsWith('.md'));
-  const agents = agentFiles.map((f: string) => ({
-    id: f.replace('.md', ''),
-    name: f.replace('.md', '').split(/[-_]/).map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join(' '),
-    role: 'agent',
-    status: 'active',
-    model: 'claude-opus-4-7',
-    capabilities: ['code', 'analysis', 'architecture']
-  }));
+  const agents = await readJson(AGENTS_METADATA_FILE, []);
   res.json(agents);
 });
 
 app.get('/api/agents/:id', async (req, res) => {
-  const fp = path.join(AGENTS_DIR, `${req.params.id}.md`);
-  if (!await fs.pathExists(fp)) return res.status(404).json({ error: 'Agent not found' });
-  res.json({ id: req.params.id, name: req.params.id, status: 'active', role: 'agent' });
+  const agents = await readJson(AGENTS_METADATA_FILE, []);
+  const agent = agents.find((a: any) => a.id === req.params.id);
+  if (!agent) return res.status(404).json({ error: 'Agent not found' });
+  res.json(agent);
 });
 
 app.post('/api/agents', async (req, res) => {
-  const { name, prompt } = req.body;
-  const id = name.toLowerCase().replace(/\s+/g, '-');
+  const { name, prompt, model, description, capabilities, role } = req.body;
+  const id = req.body.id || name.toLowerCase().replace(/\s+/g, '-');
+  
+  const agents = await readJson(AGENTS_METADATA_FILE, []);
+  const newAgent = {
+    id,
+    name,
+    description: description || '',
+    model: model || 'claude-3-5-sonnet-20241022',
+    status: 'active',
+    role: role || 'agent',
+    capabilities: capabilities || [],
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    config: req.body.config || {}
+  };
+  
+  agents.push(newAgent);
+  await writeJson(AGENTS_METADATA_FILE, agents);
+  
+  // Also save the prompt file
   await fs.writeFile(path.join(AGENTS_DIR, `${id}.md`), prompt || `# ${name}\n\nAgent prompt.`, 'utf-8');
+  
   logActivity('agent', `Agent created: ${name}`, id);
-  res.json({ id, name, status: 'active', role: 'agent' });
+  res.json(newAgent);
 });
 
 app.put('/api/agents/:id', async (req, res) => {
-  const fp = path.join(AGENTS_DIR, `${req.params.id}.md`);
-  if (req.body.prompt) await fs.writeFile(fp, req.body.prompt, 'utf-8');
+  const agents = await readJson(AGENTS_METADATA_FILE, []);
+  const idx = agents.findIndex((a: any) => a.id === req.params.id);
+  
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  
+  const updatedAgent = {
+    ...agents[idx],
+    ...req.body,
+    id: req.params.id, // Ensure ID doesn't change
+    updated_at: new Date().toISOString()
+  };
+  
+  // Don't save prompt in json metadata
+  const { system_prompt, ...metadataOnly } = updatedAgent;
+  agents[idx] = metadataOnly;
+  
+  await writeJson(AGENTS_METADATA_FILE, agents);
+  
+  // Save prompt file if provided
+  if (req.body.system_prompt) {
+    await fs.writeFile(path.join(AGENTS_DIR, `${req.params.id}.md`), req.body.system_prompt, 'utf-8');
+  }
+  
   logActivity('agent', `Agent updated: ${req.params.id}`, req.params.id);
-  res.json({ id: req.params.id, ...req.body, status: 'active' });
+  res.json(agents[idx]);
 });
 
 app.delete('/api/agents/:id', async (req, res) => {
+  let agents = await readJson(AGENTS_METADATA_FILE, []);
+  agents = agents.filter((a: any) => a.id !== req.params.id);
+  await writeJson(AGENTS_METADATA_FILE, agents);
+  
   const fp = path.join(AGENTS_DIR, `${req.params.id}.md`);
   if (await fs.pathExists(fp)) await fs.remove(fp);
+  
   logActivity('agent', `Agent deleted: ${req.params.id}`, req.params.id);
   res.json({ success: true });
 });
@@ -374,53 +444,205 @@ app.post('/api/tasks/:id/execute', async (req, res) => {
   res.json({ success: true, result: 'Task executed successfully' });
 });
 
+// ============ ANALYTICS HELPERS ============
+const execAsync = promisify(exec);
+
+const getDateRange = (range: string) => {
+  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  return { startDate, endDate, days };
+};
+
+const getGitStats = async (range: string) => {
+  try {
+    const { startDate, endDate } = getDateRange(range);
+    const since = startDate.toISOString();
+    const until = endDate.toISOString();
+
+    // Get commit count
+    const { stdout: commitCount } = await execAsync(
+      `git rev-list --count --since="${since}" --until="${until}" HEAD`,
+      { cwd: ROOT_DIR, timeout: 10000 }
+    ).catch(() => ({ stdout: '0' }));
+
+    // Get lines changed (code velocity) using date-based refs
+    const { stdout: diffStats } = await execAsync(
+      `git diff --shortstat "HEAD@{${since}}".."HEAD@{${until}}"`,
+      { cwd: ROOT_DIR, timeout: 10000 }
+    ).catch(() => ({ stdout: '' }));
+
+    let linesAdded = 0;
+    let linesDeleted = 0;
+    const match = diffStats.match(/(\d+) insertion(?:s)?(?:, (\d+) deletion(?:s)?)?/);
+    if (match) {
+      linesAdded = parseInt(match[1]) || 0;
+      linesDeleted = parseInt(match[2]) || 0;
+    }
+
+    // Get commits by day for trends
+    const { stdout: logByDay } = await execAsync(
+      `git log --since="${since}" --until="${until}" --format="%ad" --date=short HEAD`,
+      { cwd: ROOT_DIR, timeout: 10000 }
+    ).catch(() => ({ stdout: '' }));
+
+    const commitsByDay: Record<string, number> = {};
+    logByDay.split('\n').filter(Boolean).forEach(date => {
+      commitsByDay[date] = (commitsByDay[date] || 0) + 1;
+    });
+
+    return {
+      commits: parseInt(commitCount) || 0,
+      code_velocity: linesAdded + linesDeleted,
+      commits_by_day: commitsByDay,
+    };
+  } catch (error) {
+    console.error('Git stats error:', error);
+    return { commits: 0, code_velocity: 0, commits_by_day: {} };
+  }
+};
+
+const getTaskStats = async (range: string) => {
+  try {
+    const { startDate, endDate } = getDateRange(range);
+    const tasks = await readJson(TASKS_FILE, []);
+
+    const filteredTasks = tasks.filter((t: any) => {
+      const createdAt = new Date(t.created_at);
+      return createdAt >= startDate && createdAt <= endDate;
+    });
+
+    const completedTasks = filteredTasks.filter((t: any) => t.status === 'completed');
+    const failedTasks = filteredTasks.filter((t: any) => t.status === 'failed');
+
+    // Calculate average duration
+    let totalDuration = 0;
+    let durationCount = 0;
+    completedTasks.forEach((t: any) => {
+      if (t.created_at && t.updated_at) {
+        const created = new Date(t.created_at).getTime();
+        const updated = new Date(t.updated_at).getTime();
+        const duration = (updated - created) / (1000 * 60 * 60); // hours
+        if (duration > 0 && duration < 24) { // Filter out unrealistic durations
+          totalDuration += duration;
+          durationCount++;
+        }
+      }
+    });
+
+    // Tasks by day for trends
+    const tasksByDay: Record<string, number> = {};
+    filteredTasks.forEach((t: any) => {
+      const date = new Date(t.created_at).toISOString().split('T')[0];
+      tasksByDay[date] = (tasksByDay[date] || 0) + 1;
+    });
+
+    return {
+      total_tasks: filteredTasks.length,
+      completed_tasks: completedTasks.length,
+      failed_tasks: failedTasks.length,
+      average_duration: durationCount > 0 ? totalDuration / durationCount : 0,
+      utilization: filteredTasks.length > 0 ? Math.round((completedTasks.length / filteredTasks.length) * 100) : 0,
+      tasks_by_day: tasksByDay,
+    };
+  } catch (error) {
+    console.error('Task stats error:', error);
+    return { total_tasks: 0, completed_tasks: 0, failed_tasks: 0, average_duration: 0, utilization: 0, tasks_by_day: {} };
+  }
+};
+
+const getActivityStats = async (range: string) => {
+  try {
+    const { startDate, endDate, days } = getDateRange(range);
+    const activities = await readJson(ACTIVITIES_FILE, []);
+
+    const filteredActivities = activities.filter((a: any) => {
+      const timestamp = new Date(a.timestamp);
+      return timestamp >= startDate && timestamp <= endDate;
+    });
+
+    const agentActivities = filteredActivities.filter((a: any) => a.type === 'agent');
+    const errorActivities = filteredActivities.filter((a: any) => a.type === 'error');
+    const workspaceActivities = filteredActivities.filter((a: any) => a.type === 'workspace');
+
+    // Activities by day for trends
+    const errorsByDay: Record<string, number> = {};
+    errorActivities.forEach((a: any) => {
+      const date = new Date(a.timestamp).toISOString().split('T')[0];
+      errorsByDay[date] = (errorsByDay[date] || 0) + 1;
+    });
+
+    // Calculate error rate
+    const errorRate = filteredActivities.length > 0 ? errorActivities.length / filteredActivities.length : 0;
+
+    return {
+      communication_count: agentActivities.length,
+      error_count: errorActivities.length,
+      workspace_count: workspaceActivities.length,
+      total_activities: filteredActivities.length,
+      error_rate: errorRate,
+      errors_by_day: errorsByDay,
+    };
+  } catch (error) {
+    console.error('Activity stats error:', error);
+    return { communication_count: 0, error_count: 0, workspace_count: 0, total_activities: 0, error_rate: 0, errors_by_day: {} };
+  }
+};
+
 // ============ ANALYTICS ============
 app.get('/api/analytics', async (req, res) => {
   const range = req.query.range || '7d';
-  const tasks = await readJson(TASKS_FILE, []);
-  const activities = await readJson(ACTIVITIES_FILE, []);
+  const { startDate, endDate, days } = getDateRange(range);
+
+  // Get real data from all sources
+  const [gitStats, taskStats, activityStats] = await Promise.all([
+    getGitStats(range),
+    getTaskStats(range),
+    getActivityStats(range),
+  ]);
 
   // Generate trend data
   const trends = [];
-  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
   for (let i = days - 1; i >= 0; i--) {
     const date = new Date();
     date.setDate(date.getDate() - i);
-    const dayActivities = activities.filter((a: any) =>
-      new Date(a.timestamp).toDateString() === date.toDateString()
-    );
+    const dateStr = date.toISOString().split('T')[0];
+
     trends.push({
       timestamp: date.toISOString(),
-      commits: Math.floor(Math.random() * 10) + 2,
-      tasks: tasks.filter((t: any) =>
-        new Date(t.created_at).toDateString() === date.toDateString()
-      ).length,
-      errors: dayActivities.filter((a: any) => a.type === 'error').length,
+      commits: gitStats.commits_by_day[dateStr] || 0,
+      tasks: taskStats.tasks_by_day[dateStr] || 0,
+      errors: activityStats.errors_by_day[dateStr] || 0,
     });
   }
 
+  // Calculate system uptime
+  const uptimeHours = process.uptime() / 3600;
+  const uptimePercent = uptimeHours > 24 ? 99.9 : Math.min(99.9, (uptimeHours / 24) * 100);
+
   res.json({
     development: {
-      commits: 47,
-      pull_requests: 12,
-      code_velocity: 2340,
-      test_coverage: 87,
-      bug_count: 3,
-      deployment_frequency: 5,
+      commits: gitStats.commits,
+      pull_requests: 0, // Not available from git alone
+      code_velocity: gitStats.code_velocity,
+      test_coverage: 0, // Not available without test reports
+      bug_count: taskStats.failed_tasks,
+      deployment_frequency: 0, // Not available without deployment tracking
     },
     system: {
       cpu_usage: Math.round(os.loadavg()[0] * 10),
       memory_usage: Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100),
-      uptime: 99.9,
-      response_time: 145,
-      error_rate: 0.02,
+      uptime: uptimePercent,
+      response_time: 0, // Would need request timing middleware
+      error_rate: activityStats.error_rate,
     },
     agents: {
-      total_tasks: tasks.length,
-      completed_tasks: tasks.filter((t: any) => t.status === 'completed').length,
-      average_duration: 2.3,
-      utilization: 78,
-      communication_count: activities.filter((a: any) => a.type === 'agent').length,
+      total_tasks: taskStats.total_tasks,
+      completed_tasks: taskStats.completed_tasks,
+      average_duration: taskStats.average_duration,
+      utilization: taskStats.utilization,
+      communication_count: activityStats.communication_count,
     },
     trends,
   });
@@ -536,14 +758,27 @@ app.get('/api/cli/sessions/:id', async (req, res) => {
         if (entry.type === 'user') {
           const rawContent = entry.message?.content;
           let text = '';
-          if (typeof rawContent === 'string') text = rawContent;
-          else if (Array.isArray(rawContent)) text = rawContent.find(b => b.type === 'text')?.text || '';
+          if (typeof rawContent === 'string') {
+            text = rawContent;
+          } else if (Array.isArray(rawContent)) {
+            // Join all text blocks
+            text = rawContent
+              .filter(b => b.type === 'text')
+              .map(b => b.text)
+              .join('\n');
+            
+            // If no text, check for images or other blocks
+            if (!text && rawContent.length > 0) {
+              const types = rawContent.map(b => b.type).join(', ');
+              text = `[Content: ${types}]`;
+            }
+          }
           
           messages.push({
             id: entry.uuid || genId(),
             role: 'user',
             type: 'user',
-            content: text || '[Complex Message]',
+            content: text || '[Empty Message]',
             timestamp: entry.timestamp
           });
         } else if (entry.type === 'assistant') {
@@ -556,12 +791,12 @@ app.get('/api/cli/sessions/:id', async (req, res) => {
             ? blocks.filter((b: any) => b.type === 'tool_use').map((b: any) => b.name)
             : [];
           
-          if (text || tools.length > 0) {
+          if (text || tools.length > 0 || Array.isArray(blocks)) {
             messages.push({
               id: entry.uuid || genId(),
               role: 'assistant',
               type: 'assistant',
-              content: text || `[Tool Use: ${tools.join(', ')}]`,
+              content: text || (tools.length > 0 ? `[Tool Use: ${tools.join(', ')}]` : '[Processing...]'),
               timestamp: entry.timestamp,
               tools: tools,
               model: entry.message?.model || 'claude-3'
@@ -689,7 +924,6 @@ app.get('/api/providers/:id/models', async (req, res) => {
 });
 
 // ============ HOOK EXECUTION ENGINE ============
-const execAsync = promisify(exec);
 
 app.post('/api/hooks/:id/execute', async (req, res) => {
   const hooks = await readJson(HOOKS_FILE, []);

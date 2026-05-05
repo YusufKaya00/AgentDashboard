@@ -50,37 +50,6 @@ export default function AnalyticsDashboard() {
       setData(result);
     } catch (error) {
       console.error('Error loading analytics:', error);
-      // Mock data for demo
-      setData({
-        development: {
-          commits: 47,
-          pull_requests: 12,
-          code_velocity: 2340,
-          test_coverage: 87,
-          bug_count: 3,
-          deployment_frequency: 5,
-        },
-        system: {
-          cpu_usage: 42,
-          memory_usage: 67,
-          uptime: 99.9,
-          response_time: 145,
-          error_rate: 0.02,
-        },
-        agents: {
-          total_tasks: 156,
-          completed_tasks: 142,
-          average_duration: 2.3,
-          utilization: 78,
-          communication_count: 89,
-        },
-        trends: Array.from({ length: 7 }, (_, i) => ({
-          timestamp: new Date(Date.now() - (6 - i) * 24 * 60 * 60 * 1000).toISOString(),
-          commits: Math.floor(Math.random() * 10) + 2,
-          tasks: Math.floor(Math.random() * 20) + 5,
-          errors: Math.floor(Math.random() * 3),
-        })),
-      });
     } finally {
       setLoading(false);
     }

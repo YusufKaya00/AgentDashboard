@@ -98,5 +98,12 @@
     "config": {},
     "created_at": "2026-05-02T16:25:07.857834",
     "usage_count": 0
+  },
+  {
+    "id": "06sf234ptmosg40ic",
+    "name": "speed up",
+    "description": "u need to organize to task speed up  u can skip thinking sections extra",
+    "category": "custom",
+    "active": true
   }
 ]
