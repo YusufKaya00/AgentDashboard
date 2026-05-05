@@ -199,7 +199,7 @@ export default function SkillManager() {
               <div className="flex items-start justify-between mb-2">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 group-hover:border-primary group-hover:bg-primary/10 transition-all">
-                    <span className="text-xl">🛠️</span>
+                    <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                   </div>
                   <div>
                     <h4 className="text-lg font-bold text-white tracking-tight">{skill.name}</h4>

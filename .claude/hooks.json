@@ -11,6 +11,7 @@
     "name": "Lint on Save",
     "event": "file_change",
     "action": "npm run lint",
-    "enabled": false
+    "enabled": false,
+    "active": false
   }
 ]

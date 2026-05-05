@@ -26,7 +26,7 @@ export default function AgentList({ agents, onRefresh, showAll = false }: AgentL
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this node?')) {
+    if (confirm('Are you sure you want to delete this agent?')) {
       await api.deleteAgent(id);
       onRefresh();
     }
@@ -51,114 +51,107 @@ export default function AgentList({ agents, onRefresh, showAll = false }: AgentL
     onRefresh();
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'bg-accent/10 text-accent border-accent/30';
-      case 'inactive':
-        return 'bg-surface text-foreground-muted border-border';
-      case 'error':
-        return 'bg-error/10 text-error border-error/30';
-      default:
-        return 'bg-surface text-foreground-muted border-border';
-    }
-  };
-
   const displayAgents = showAll ? agents : agents.slice(0, 5);
 
   return (
-    <div className="space-y-8 animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
       {/* Header Section */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-black text-white tracking-tight">Agent <span className="text-muted font-light">Fleet</span></h1>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
-            <p className="text-[10px] text-muted font-bold uppercase tracking-[0.2em]">Autonomous Entity Matrix</p>
-          </div>
+          <h2 className="text-xl font-bold text-white tracking-tight">Agent Registry</h2>
+          <p className="text-[10px] text-muted font-bold uppercase tracking-widest mt-1">Autonomous Entity Management</p>
         </div>
         {showAll && (
-          <button
-            onClick={handleCreate}
-            className="btn btn-primary"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-            </svg>
-            <span>Deploy Agent</span>
+          <button onClick={handleCreate} className="btn btn-primary btn-sm px-4">
+            New Agent
           </button>
         )}
       </div>
 
-      {displayAgents.length === 0 ? (
-        <div className="glass-card p-20 text-center border-dashed border-border">
-          <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-10 h-10 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-          </div>
-          <h3 className="text-xl font-bold text-white mb-2">No Agents Deployed</h3>
-          <p className="text-sm text-muted">Initialize your first autonomous agent to begin operations.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {displayAgents.map((agent) => (
-            <div 
-              key={agent.id} 
-              className={`glass-card group flex flex-col ${
-                agent.status !== 'active' ? 'opacity-50 grayscale' : ''
-              }`}
-            >
-              <div className="flex items-start justify-between mb-6">
-                <div className="w-12 h-12 rounded-2xl bg-surface flex items-center justify-center border border-border group-hover:border-primary group-hover:bg-primary/10 transition-all">
-                  <span className="text-xl">🤖</span>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span className={`px-2 py-0.5 rounded-md border text-[9px] font-black uppercase tracking-wider ${
-                    agent.status === 'active' ? 'bg-accent/10 text-accent border-accent/20' : 'bg-surface text-muted border-border'
-                  }`}>
-                    {agent.status}
-                  </span>
-                  <span className="text-[9px] text-muted font-mono">{agent.model.split('-').slice(0, 2).join('-')}</span>
-                </div>
-              </div>
-
-              <div className="flex-1">
-                <h3 className="text-xl font-bold text-white mb-2 tracking-tight group-hover:text-primary transition-colors">{agent.name}</h3>
-                <p className="text-xs text-muted leading-relaxed mb-4 line-clamp-2">{agent.description}</p>
-                
-                <div className="space-y-4 mb-6">
-                  <div className="flex flex-col gap-1.5">
-                    {agent.capabilities?.map((cap, idx) => (
-                      <span key={idx} className="px-2 py-0.5 rounded-md bg-white/5 border border-white/5 text-[9px] font-bold text-white/60 group-hover:text-white transition-colors">
-                        {cap}
+      <div className="card p-0 overflow-hidden border-border bg-surface/50">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-border bg-white/[0.02]">
+                <th className="px-6 py-4 text-[10px] font-black text-muted uppercase tracking-widest">Name & Model</th>
+                <th className="px-6 py-4 text-[10px] font-black text-muted uppercase tracking-widest">Status</th>
+                <th className="px-6 py-4 text-[10px] font-black text-muted uppercase tracking-widest">Role</th>
+                <th className="px-6 py-4 text-[10px] font-black text-muted uppercase tracking-widest">Capabilities</th>
+                {showAll && <th className="px-6 py-4 text-[10px] font-black text-muted uppercase tracking-widest text-right">Actions</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50">
+              {displayAgents.length === 0 ? (
+                <tr>
+                  <td colSpan={showAll ? 5 : 4} className="px-6 py-12 text-center text-muted text-sm">
+                    No agents found in the registry.
+                  </td>
+                </tr>
+              ) : (
+                displayAgents.map((agent) => (
+                  <tr key={agent.id} className="hover:bg-white/[0.02] transition-colors group">
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-white group-hover:text-primary transition-colors">{agent.name}</span>
+                        <span className="text-[10px] text-muted font-mono mt-0.5">{agent.model}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`badge ${
+                        agent.status === 'active' ? 'text-accent border-accent/20 bg-accent/5' : 
+                        agent.status === 'error' ? 'text-error border-error/20 bg-error/5' : 
+                        'text-muted border-border bg-surface'
+                      }`}>
+                        {agent.status}
                       </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {showAll && (
-                <div className="flex items-center gap-2 pt-4 border-t border-white/5 mt-auto">
-                  <button onClick={() => handleToggle(agent)} className="btn btn-secondary flex-1 text-xs py-1.5">
-                    {agent.status === 'active' ? 'Suspend' : 'Resume'}
-                  </button>
-                  <button onClick={() => handleEdit(agent)} className="btn btn-secondary p-2 hover:text-[var(--primary)]">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
-                  </button>
-                  <button onClick={() => handleDelete(agent.id)} className="btn btn-secondary p-2 hover:text-red-500">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-xs text-white/70 font-medium">{agent.role || 'Agent'}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-1">
+                        {agent.capabilities?.slice(0, 3).map((cap, i) => (
+                          <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-muted border border-white/5">
+                            {cap}
+                          </span>
+                        ))}
+                        {agent.capabilities && agent.capabilities.length > 3 && (
+                          <span className="text-[9px] text-muted px-1">+{agent.capabilities.length - 3}</span>
+                        )}
+                      </div>
+                    </td>
+                    {showAll && (
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button 
+                            onClick={() => handleToggle(agent)}
+                            className={`p-1.5 rounded-lg border transition-all ${
+                              agent.status === 'active' ? 'hover:bg-error/10 hover:text-error border-transparent' : 'hover:bg-accent/10 hover:text-accent border-transparent'
+                            }`}
+                            title={agent.status === 'active' ? 'Suspend' : 'Resume'}
+                          >
+                            {agent.status === 'active' ? (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            ) : (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /></svg>
+                            )}
+                          </button>
+                          <button onClick={() => handleEdit(agent)} className="p-1.5 rounded-lg border border-transparent hover:border-border hover:bg-white/5 text-muted hover:text-white transition-all">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                          </button>
+                          <button onClick={() => handleDelete(agent.id)} className="p-1.5 rounded-lg border border-transparent hover:bg-error/10 text-muted hover:text-error transition-all">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))
               )}
-            </div>
-          ))}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
 
       {showModal && (
         <AgentModal

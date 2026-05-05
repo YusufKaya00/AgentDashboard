@@ -99,43 +99,49 @@ export default function Home() {
   return (
     <DashboardLayout activeTab={activeTab} onTabChange={setActiveTab}>
       {activeTab === 'dashboard' && (
-        <div className="space-y-8 animate-fade-in">
-          <div className="flex items-center justify-between mb-4">
+        <div className="space-y-10 animate-fade-in">
+          {/* Dashboard Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-2">
                 <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">System Intelligence</span>
+                <span className="text-[10px] font-black text-primary uppercase tracking-[0.4em]">Core Intelligence Unit</span>
               </div>
-              <h1 className="text-3xl font-black text-white tracking-tight">
+              <h1 className="text-4xl font-black text-white tracking-tighter">
                 Dashboard <span className="text-muted font-light">Overview</span>
               </h1>
             </div>
-            <div className="flex items-center gap-4 bg-white/5 p-2 rounded-2xl border border-white/5">
-              <div className="px-4 py-2 bg-[var(--primary)] bg-opacity-10 rounded-xl border border-[var(--primary)] border-opacity-20">
-                <span className="text-[10px] font-black text-[var(--primary)] uppercase tracking-widest">v5.0 Stable</span>
+            <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-xl border border-white/5 self-start">
+              <div className="px-4 py-2 bg-primary/10 rounded-lg border border-primary/20">
+                <span className="text-[10px] font-black text-primary uppercase tracking-widest">System v5.0</span>
+              </div>
+              <div className="px-4 py-2 bg-accent/10 rounded-lg border border-accent/20">
+                <span className="text-[10px] font-black text-accent uppercase tracking-widest">Operational</span>
               </div>
             </div>
           </div>
 
+          {/* Core Metrics Grid */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
             <AgentSummary />
             <SystemStatus />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold text-white flex items-center gap-3">
-                <span className="w-1 h-5 bg-[var(--primary)] rounded-full" />
-                Recent Agents
-              </h2>
+          {/* Secondary Sections */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+            <div className="space-y-6">
+              <div className="flex items-center justify-between px-1">
+                <h2 className="text-xl font-bold text-white tracking-tight">Recent Nodes</h2>
+                <button onClick={() => setActiveTab('agents')} className="text-[10px] font-black text-muted hover:text-primary uppercase tracking-widest transition-colors">View All</button>
+              </div>
               <AgentList agents={agents.slice(0, 5)} onRefresh={refreshAgents} />
             </div>
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold text-white flex items-center gap-3">
-                <span className="w-1 h-5 bg-[var(--accent)] rounded-full" />
-                Live Activity
-              </h2>
-              <ActivityFeed activities={activities.slice(0, 10)} />
+            <div className="space-y-6">
+              <div className="flex items-center justify-between px-1">
+                <h2 className="text-xl font-bold text-white tracking-tight">Active Transmissions</h2>
+                <button onClick={() => setActiveTab('activity')} className="text-[10px] font-black text-muted hover:text-primary uppercase tracking-widest transition-colors">Audit Logs</button>
+              </div>
+              <ActivityFeed activities={activities.slice(0, 8)} />
             </div>
           </div>
         </div>
