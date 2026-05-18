@@ -622,5 +622,129 @@
     "agent_id": "system",
     "timestamp": "2026-05-05T12:44:15.276Z",
     "metadata": {}
+  },
+  {
+    "id": "49zszugspmpb0j6yz",
+    "type": "skill-assignment",
+    "message": "Updated assignments for codex-plugin:brainstorming",
+    "agent_id": "system",
+    "timestamp": "2026-05-18T09:39:51.947Z",
+    "metadata": {
+      "target_keys": [
+        "claude_agent:team_leader"
+      ]
+    }
+  },
+  {
+    "id": "rvk3nq8kxmpb0j8fe",
+    "type": "skill-assignment",
+    "message": "Updated assignments for codex-plugin:brainstorming",
+    "agent_id": "system",
+    "timestamp": "2026-05-18T09:39:53.834Z",
+    "metadata": {
+      "target_keys": [
+        "claude_agent:team_leader"
+      ]
+    }
+  },
+  {
+    "id": "4tiomsf7gmpb0j95f",
+    "type": "skill-assignment",
+    "message": "Updated assignments for codex-plugin:brainstorming",
+    "agent_id": "system",
+    "timestamp": "2026-05-18T09:39:54.771Z",
+    "metadata": {
+      "target_keys": [
+        "claude_agent:team_leader"
+      ]
+    }
+  },
+  {
+    "id": "dk5m1ynyjmpb0nmsf",
+    "type": "workspace",
+    "message": "File modified: src\\components\\AgentModal.tsx",
+    "agent_id": "system",
+    "timestamp": "2026-05-18T09:43:19.071Z",
+    "metadata": {}
+  },
+  {
+    "id": "73kwvlg53mpb0nocl",
+    "type": "workspace",
+    "message": "File modified: src\\components\\ModelList.tsx",
+    "agent_id": "system",
+    "timestamp": "2026-05-18T09:43:21.093Z",
+    "metadata": {}
+  },
+  {
+    "id": "xzoy18s1ampb0npwe",
+    "type": "workspace",
+    "message": "File modified: src\\components\\AIProviderManager.tsx",
+    "agent_id": "system",
+    "timestamp": "2026-05-18T09:43:23.102Z",
+    "metadata": {}
+  },
+  {
+    "id": "7xkyfud7jmpb0o5cg",
+    "type": "workspace",
+    "message": "File modified: next-env.d.ts",
+    "agent_id": "system",
+    "timestamp": "2026-05-18T09:43:43.120Z",
+    "metadata": {}
+  },
+  {
+    "id": "9y54f2qkrmpb0on6r",
+    "type": "workspace",
+    "message": "File modified: src\\components\\AgentModal.tsx",
+    "agent_id": "system",
+    "timestamp": "2026-05-18T09:44:06.243Z",
+    "metadata": {}
+  },
+  {
+    "id": "qy4cejpbompb0ooqm",
+    "type": "workspace",
+    "message": "File modified: src\\components\\AIProviderManager.tsx",
+    "agent_id": "system",
+    "timestamp": "2026-05-18T09:44:08.254Z",
+    "metadata": {}
+  },
+  {
+    "id": "noh3y8gopmpb0oqaf",
+    "type": "workspace",
+    "message": "File modified: src\\components\\ModelList.tsx",
+    "agent_id": "system",
+    "timestamp": "2026-05-18T09:44:10.263Z",
+    "metadata": {}
+  },
+  {
+    "id": "hzhg4m08lmpb0pcq7",
+    "type": "workspace",
+    "message": "File modified: src\\components\\AgentModal.tsx",
+    "agent_id": "system",
+    "timestamp": "2026-05-18T09:44:39.343Z",
+    "metadata": {}
+  },
+  {
+    "id": "kf3dyo99gmpb0pea1",
+    "type": "workspace",
+    "message": "File modified: src\\components\\AIProviderManager.tsx",
+    "agent_id": "system",
+    "timestamp": "2026-05-18T09:44:41.353Z",
+    "metadata": {}
+  },
+  {
+    "id": "gfyazte36mpb0q3ri",
+    "type": "workspace",
+    "message": "File modified: docs\\superpowers\\plans\\2026-05-18-general-ai-dashboard.md",
+    "agent_id": "system",
+    "timestamp": "2026-05-18T09:45:14.382Z",
+    "metadata": {}
+  },
+  {
+    "id": "syki6norumpb20jxa",
+    "type": "workspace",
+    "message": "File modified: next-env.d.ts",
+    "agent_id": "system",
+    "timestamp": "2026-05-18T10:21:21.503Z",
+    "metadata": {}
   }
 ]

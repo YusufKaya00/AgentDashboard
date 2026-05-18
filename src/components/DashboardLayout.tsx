@@ -2,10 +2,12 @@
 
 import { ReactNode } from 'react';
 
+type DashboardTab = 'dashboard' | 'agents' | 'skills' | 'hooks' | 'models' | 'activity' | 'clisessions' | 'codex' | 'system' | 'tasks' | 'analytics' | 'terminal' | 'providers' | 'claude-editor';
+
 interface DashboardLayoutProps {
   children: ReactNode;
-  activeTab: 'dashboard' | 'agents' | 'skills' | 'hooks' | 'models' | 'activity' | 'clisessions' | 'system' | 'tasks' | 'analytics' | 'terminal' | 'providers' | 'claude-editor';
-  onTabChange: (tab: 'dashboard' | 'agents' | 'skills' | 'hooks' | 'models' | 'activity' | 'clisessions' | 'system' | 'tasks' | 'analytics' | 'terminal' | 'providers' | 'claude-editor') => void;
+  activeTab: DashboardTab;
+  onTabChange: (tab: DashboardTab) => void;
 }
 
 const Icon = ({ d }: { d: string }) => (
@@ -22,6 +24,7 @@ export default function DashboardLayout({ children, activeTab, onTabChange }: Da
     { id: 'providers' as const, label: 'AI Providers', icon: 'M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9' },
     { id: 'claude-editor' as const, label: 'CLAUDE.md', icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
     { id: 'clisessions' as const, label: 'CLI Sessions', icon: 'M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+    { id: 'codex' as const, label: 'Codex', icon: 'M12 6V3m0 18v-3m6-6h3M3 12h3m10.95-4.95l2.12-2.12M4.93 19.07l2.12-2.12m0-9.9L4.93 4.93m14.14 14.14l-2.12-2.12M9 9h6v6H9z' },
     { id: 'hooks' as const, label: 'Hooks', icon: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1' },
     { id: 'models' as const, label: 'Models', icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z' },
     { id: 'activity' as const, label: 'Activity', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },

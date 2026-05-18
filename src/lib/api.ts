@@ -1,4 +1,6 @@
 // API Client
+import type { AIControlPlaneOverview, AITarget, SkillAssignment } from '@/types';
+
 const API_BASE = 'http://localhost:8000/api';
 
 export const api = {
@@ -352,6 +354,34 @@ export const api = {
   },
   getCLIMessages: async (sessionId: string): Promise<any[]> => {
     const res = await fetch(`${API_BASE}/cli/sessions/${sessionId}`);
+    return res.json();
+  },
+
+  // Codex
+  getCodexOverview: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/codex/overview`);
+    return res.json();
+  },
+
+  // General AI Control Plane
+  getAIOverview: async (): Promise<AIControlPlaneOverview> => {
+    const res = await fetch(`${API_BASE}/ai/overview`);
+    return res.json();
+  },
+  getAITargets: async (): Promise<AITarget[]> => {
+    const res = await fetch(`${API_BASE}/ai/targets`);
+    return res.json();
+  },
+  getSkillAssignments: async (): Promise<SkillAssignment[]> => {
+    const res = await fetch(`${API_BASE}/ai/skill-assignments`);
+    return res.json();
+  },
+  replaceSkillAssignments: async (skillKey: string, targetKeys: string[]): Promise<{ success: boolean; assignments: SkillAssignment[] }> => {
+    const res = await fetch(`${API_BASE}/ai/skills/${encodeURIComponent(skillKey)}/assignments`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_keys: targetKeys }),
+    });
     return res.json();
   },
 };

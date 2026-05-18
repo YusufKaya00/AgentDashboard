@@ -9,6 +9,13 @@ import os from 'os';
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { getCodexInventory } from './lib/codexInventory.js';
+import {
+  buildAITargets,
+  buildUnifiedSkills,
+  replaceSkillAssignments,
+  type SkillAssignment,
+} from './lib/aiControlPlane.js';
 
 import 'dotenv/config';
 
@@ -33,6 +40,7 @@ const MODELS_FILE = path.join(CLAUDE_DIR, 'models.json');
 const HOOKS_FILE = path.join(CLAUDE_DIR, 'hooks.json');
 const SKILLS_FILE = path.join(CLAUDE_DIR, 'skills.json');
 const ACTIVITIES_FILE = path.join(DATA_DIR, 'activities.json');
+const SKILL_ASSIGNMENTS_FILE = path.join(DATA_DIR, 'skill_assignments.json');
 
 // Ensure directories exist
 [AGENTS_DIR, DATA_DIR].forEach(dir => fs.ensureDirSync(dir));
@@ -61,6 +69,48 @@ const logActivity = async (type: string, message: string, agentId = 'system', me
   activities.push(activity);
   await writeJson(ACTIVITIES_FILE, activities.slice(-500));
   broadcast({ type: 'activity', data: activity });
+};
+
+const normalizeSkill = (skill: any) => {
+  const enabled = skill.enabled ?? skill.active ?? true;
+  return { ...skill, enabled, active: enabled };
+};
+
+const getAIControlPlaneOverview = async () => {
+  const [agents, claudeSkills, models, providers, assignments, codexInventory] = await Promise.all([
+    readJson(AGENTS_METADATA_FILE, []),
+    readJson(SKILLS_FILE, []),
+    readJson(MODELS_FILE, []),
+    readJson(PROVIDERS_FILE, []),
+    readJson(SKILL_ASSIGNMENTS_FILE, []),
+    getCodexInventory({ codexHome: path.join(os.homedir(), '.codex'), workspaceDir: ROOT_DIR }),
+  ]);
+
+  const normalizedAssignments = Array.isArray(assignments) ? assignments as SkillAssignment[] : [];
+  const targets = buildAITargets({
+    agents: Array.isArray(agents) ? agents : [],
+    codexAgents: codexInventory.agents,
+    models: Array.isArray(models) ? models : [],
+    providers: Array.isArray(providers) ? providers : [],
+  });
+  const skills = buildUnifiedSkills(
+    Array.isArray(claudeSkills) ? claudeSkills.map(normalizeSkill) : [],
+    codexInventory.skills.items,
+    normalizedAssignments
+  );
+
+  return {
+    skills,
+    targets,
+    assignments: normalizedAssignments,
+    summary: {
+      skills: skills.length,
+      targets: targets.length,
+      assignments: normalizedAssignments.length,
+      codex_skills: codexInventory.skills.total,
+      claude_skills: Array.isArray(claudeSkills) ? claudeSkills.length : 0,
+    },
+  };
 };
 
 // ============ FILE WATCHER ============
@@ -240,6 +290,30 @@ app.put('/api/agents/:id', async (req, res) => {
   res.json(agents[idx]);
 });
 
+app.post('/api/agents/:id/activate', async (req, res) => {
+  const agents = await readJson(AGENTS_METADATA_FILE, []);
+  const agent = agents.find((a: any) => a.id === req.params.id);
+  if (!agent) return res.status(404).json({ error: 'Not found' });
+
+  agent.status = 'active';
+  agent.updated_at = new Date().toISOString();
+  await writeJson(AGENTS_METADATA_FILE, agents);
+  logActivity('agent', `Agent activated: ${req.params.id}`, req.params.id);
+  res.json(agent);
+});
+
+app.post('/api/agents/:id/deactivate', async (req, res) => {
+  const agents = await readJson(AGENTS_METADATA_FILE, []);
+  const agent = agents.find((a: any) => a.id === req.params.id);
+  if (!agent) return res.status(404).json({ error: 'Not found' });
+
+  agent.status = 'inactive';
+  agent.updated_at = new Date().toISOString();
+  await writeJson(AGENTS_METADATA_FILE, agents);
+  logActivity('agent', `Agent deactivated: ${req.params.id}`, req.params.id);
+  res.json(agent);
+});
+
 app.delete('/api/agents/:id', async (req, res) => {
   let agents = await readJson(AGENTS_METADATA_FILE, []);
   agents = agents.filter((a: any) => a.id !== req.params.id);
@@ -324,15 +398,27 @@ app.post('/api/hooks/:id/toggle', async (req, res) => {
 });
 
 // ============ SKILLS CRUD ============
-app.get('/api/skills', async (_req, res) => res.json(await readJson(SKILLS_FILE, [])));
+app.get('/api/skills', async (_req, res) => res.json((await readJson(SKILLS_FILE, [])).map(normalizeSkill)));
 app.get('/api/skills/stats', async (_req, res) => {
-  const skills = await readJson(SKILLS_FILE, []);
-  const active = skills.filter((s: any) => s.active !== false).length;
-  res.json({ total: skills.length, active, inactive: skills.length - active });
+  const skills = (await readJson(SKILLS_FILE, [])).map(normalizeSkill);
+  const enabled = skills.filter((s: any) => s.enabled !== false).length;
+  const categories = skills.reduce((acc: any, skill: any) => {
+    const category = skill.category || 'custom';
+    acc[category] = (acc[category] || 0) + 1;
+    return acc;
+  }, {});
+  res.json({
+    total: skills.length,
+    enabled,
+    disabled: skills.length - enabled,
+    active: enabled,
+    inactive: skills.length - enabled,
+    categories
+  });
 });
 app.post('/api/skills', async (req, res) => {
   const skills = await readJson(SKILLS_FILE, []);
-  const skill = { id: genId(), ...req.body, active: true };
+  const skill = normalizeSkill({ id: genId(), ...req.body, enabled: true, active: true });
   skills.push(skill);
   await writeJson(SKILLS_FILE, skills);
   logActivity('skill', `Skill created: ${skill.name}`, 'system');
@@ -342,7 +428,7 @@ app.put('/api/skills/:id', async (req, res) => {
   const skills = await readJson(SKILLS_FILE, []);
   const idx = skills.findIndex((s: any) => s.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
-  skills[idx] = { ...skills[idx], ...req.body };
+  skills[idx] = normalizeSkill({ ...skills[idx], ...req.body });
   await writeJson(SKILLS_FILE, skills);
   res.json(skills[idx]);
 });
@@ -356,9 +442,11 @@ app.post('/api/skills/:id/toggle', async (req, res) => {
   const skills = await readJson(SKILLS_FILE, []);
   const s = skills.find((s: any) => s.id === req.params.id);
   if (!s) return res.status(404).json({ error: 'Not found' });
-  s.active = !s.active;
+  const current = normalizeSkill(s).enabled;
+  s.enabled = !current;
+  s.active = !current;
   await writeJson(SKILLS_FILE, skills);
-  res.json(s);
+  res.json(normalizeSkill(s));
 });
 
 // ============ ACTIVITY ============
@@ -592,8 +680,8 @@ const getActivityStats = async (range: string) => {
 
 // ============ ANALYTICS ============
 app.get('/api/analytics', async (req, res) => {
-  const range = req.query.range || '7d';
-  const { startDate, endDate, days } = getDateRange(range);
+  const range = typeof req.query.range === 'string' ? req.query.range : '7d';
+  const { days } = getDateRange(range);
 
   // Get real data from all sources
   const [gitStats, taskStats, activityStats] = await Promise.all([
@@ -662,6 +750,60 @@ app.get('/api/terminal/history', async (_req, res) => {
 
 // ============ HEALTH ============
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', runtime: 'Node.js', uptime: process.uptime() }));
+
+// ============ GENERAL AI CONTROL PLANE ============
+app.get('/api/ai/overview', async (_req, res) => {
+  try {
+    res.json(await getAIControlPlaneOverview());
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to load AI control plane' });
+  }
+});
+
+app.get('/api/ai/targets', async (_req, res) => {
+  try {
+    const overview = await getAIControlPlaneOverview();
+    res.json(overview.targets);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to load AI targets' });
+  }
+});
+
+app.get('/api/ai/skill-assignments', async (_req, res) => {
+  res.json(await readJson(SKILL_ASSIGNMENTS_FILE, []));
+});
+
+app.put('/api/ai/skills/:skillKey/assignments', async (req, res) => {
+  try {
+    const targetKeys = Array.isArray(req.body?.target_keys) ? req.body.target_keys : [];
+    const existing = await readJson(SKILL_ASSIGNMENTS_FILE, []);
+    const nextAssignments = replaceSkillAssignments(
+      Array.isArray(existing) ? existing : [],
+      { skill_key: req.params.skillKey, target_keys: targetKeys },
+      new Date().toISOString()
+    );
+
+    await writeJson(SKILL_ASSIGNMENTS_FILE, nextAssignments);
+    await logActivity('skill-assignment', `Updated assignments for ${req.params.skillKey}`, 'system', { target_keys: targetKeys });
+    res.json({
+      success: true,
+      assignments: nextAssignments.filter((assignment) => assignment.skill_key === req.params.skillKey),
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update skill assignments' });
+  }
+});
+
+// ============ CODEX OBSERVABILITY ============
+app.get('/api/codex/overview', async (_req, res) => {
+  try {
+    const codexHome = path.join(os.homedir(), '.codex');
+    const inventory = await getCodexInventory({ codexHome, workspaceDir: ROOT_DIR });
+    res.json(inventory);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to inspect Codex runtime' });
+  }
+});
 
 // ============ CLI SESSION READER ============
 const getClaudeSessionsDir = () => {

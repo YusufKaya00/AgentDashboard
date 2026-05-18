@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Agent } from '@/types';
+import { Agent, AIControlPlaneOverview } from '@/types';
 import { api } from '@/lib/api';
 
 interface AgentModalProps {
@@ -22,21 +22,27 @@ export default function AgentModal({ agent, onSave, onClose }: AgentModalProps) 
     system_prompt: '',
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [models, setModels] = useState<any[]>([]);
-  const [skills, setSkills] = useState<any[]>([]);
+  const [overview, setOverview] = useState<AIControlPlaneOverview | null>(null);
   const [loadingPrompt, setLoadingPrompt] = useState(false);
 
   useEffect(() => {
     api.getModels().then(setModels);
-    api.getSkills().then(setSkills);
+    api.getAIOverview().then(setOverview);
     
     if (agent?.id) {
+      let active = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoadingPrompt(true);
       api.getAgentPrompt(agent.id)
         .then(data => {
-          setFormData(prev => ({ ...prev, system_prompt: data.prompt }));
+          if (active) setFormData(prev => ({ ...prev, system_prompt: data.prompt }));
         })
-        .finally(() => setLoadingPrompt(false));
+        .finally(() => {
+          if (active) setLoadingPrompt(false);
+        });
+      return () => { active = false; };
     }
   }, [agent]);
 
@@ -47,8 +53,12 @@ export default function AgentModal({ agent, onSave, onClose }: AgentModalProps) 
       id: formData.id || crypto.randomUUID(),
       created_at: agent?.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    } as any);
+    } as unknown as Agent);
   };
+
+  const assignedSkills = overview?.skills.filter(s => 
+    s.assigned_targets.some(t => t.target_key === `claude_agent:${formData.id}`)
+  ) || [];
 
   return (
     <div className="modal-overlay">
@@ -106,25 +116,20 @@ export default function AgentModal({ agent, onSave, onClose }: AgentModalProps) 
 
             <div className="space-y-2">
               <label className="block text-[10px] font-black text-muted uppercase tracking-widest ml-1">
-                Acquired Capabilities (Skills)
+                Assigned AI Skills (Control Plane)
               </label>
-              <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto p-3 bg-background border border-border rounded-xl custom-scrollbar">
-                {skills.map((skill) => (
-                  <label key={skill.id} className="flex items-center gap-2 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={formData.capabilities.includes(skill.name)}
-                      onChange={(e) => {
-                        const newCaps = e.target.checked
-                          ? [...formData.capabilities, skill.name]
-                          : formData.capabilities.filter((c: string) => c !== skill.name);
-                        setFormData({ ...formData, capabilities: newCaps });
-                      }}
-                      className="rounded border-border text-primary focus:ring-primary bg-surface"
-                    />
-                    <span className="text-xs text-muted group-hover:text-white transition-colors">{skill.name}</span>
-                  </label>
-                ))}
+              <div className="p-3 bg-background border border-border rounded-xl">
+                {assignedSkills.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {assignedSkills.map(skill => (
+                      <span key={skill.skill_key} className="px-2 py-1 bg-primary/10 text-primary border border-primary/20 rounded-md text-[10px] font-bold">
+                        {skill.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted">No skills assigned. Manage assignments in the AI Skill Control Plane.</p>
+                )}
               </div>
             </div>
 

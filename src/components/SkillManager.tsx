@@ -1,13 +1,46 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
-import { Skill } from '@/types';
+import type { AIControlPlaneOverview, AITarget, AITargetType, SkillSource, UnifiedSkill } from '@/types';
+
+const sourceLabels: Record<SkillSource | 'all', string> = {
+  all: 'All',
+  claude: 'Claude',
+  'codex-system': 'Codex System',
+  'codex-plugin': 'Codex Plugin',
+  'codex-user': 'Codex User',
+};
+
+const sourceStyles: Record<SkillSource, string> = {
+  claude: 'text-primary border-primary/30 bg-primary/10',
+  'codex-system': 'text-info border-info/30 bg-info/10',
+  'codex-plugin': 'text-secondary border-secondary/30 bg-secondary/10',
+  'codex-user': 'text-accent border-accent/30 bg-accent/10',
+};
+
+const targetLabels: Record<AITargetType, string> = {
+  claude_agent: 'Claude Agents',
+  codex_agent: 'Codex Roles',
+  model: 'Models',
+  provider: 'Providers',
+};
+
+const targetOrder: AITargetType[] = ['claude_agent', 'codex_agent', 'model', 'provider'];
+
+const getSkillTargets = (skill: UnifiedSkill, targets: AITarget[]) => {
+  const assignedKeys = new Set(skill.assigned_targets.map((assignment) => assignment.target_key));
+  return targets.filter((target) => assignedKeys.has(target.target_key));
+};
 
 export default function SkillManager() {
-  const [skills, setSkills] = useState<Skill[]>([]);
-  const [stats, setStats] = useState<any>(null);
+  const [overview, setOverview] = useState<AIControlPlaneOverview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedSource, setSelectedSource] = useState<SkillSource | 'all'>('all');
+  const [selectedSkillKey, setSelectedSkillKey] = useState<string | null>(null);
+  const [draftTargetKeys, setDraftTargetKeys] = useState<string[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newSkill, setNewSkill] = useState({
     name: '',
@@ -15,248 +48,287 @@ export default function SkillManager() {
     category: 'custom',
   });
 
-  useEffect(() => {
-    loadSkills();
-    loadStats();
-  }, []);
-
-  const loadSkills = async () => {
+  const loadOverview = async () => {
     try {
-      const data = await api.getSkills();
-      setSkills(data);
-    } catch (error) {
-      console.error('Error loading skills:', error);
+      setError(null);
+      const data = await api.getAIOverview();
+      setOverview(data);
+
+      const currentSkill = data.skills.find((skill) => skill.skill_key === selectedSkillKey) || data.skills[0] || null;
+      setSelectedSkillKey(currentSkill?.skill_key || null);
+      setDraftTargetKeys(currentSkill?.assigned_targets.map((assignment) => assignment.target_key) || []);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'AI skill overview could not be loaded');
     } finally {
       setLoading(false);
     }
   };
 
-  const loadStats = async () => {
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadOverview();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+    // Load once on mount; user-driven refreshes call loadOverview directly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const visibleSkills = useMemo(() => {
+    if (!overview) return [];
+    if (selectedSource === 'all') return overview.skills;
+    return overview.skills.filter((skill) => skill.source === selectedSource);
+  }, [overview, selectedSource]);
+
+  const selectedSkill = useMemo(() => {
+    return overview?.skills.find((skill) => skill.skill_key === selectedSkillKey) || null;
+  }, [overview, selectedSkillKey]);
+
+  const targetGroups = useMemo(() => {
+    const groups = new Map<AITargetType, AITarget[]>();
+    for (const type of targetOrder) {
+      groups.set(type, overview?.targets.filter((target) => target.type === type) || []);
+    }
+    return groups;
+  }, [overview]);
+
+  const handleSelectSkill = (skill: UnifiedSkill) => {
+    setSelectedSkillKey(skill.skill_key);
+    setDraftTargetKeys(skill.assigned_targets.map((assignment) => assignment.target_key));
+  };
+
+  const toggleDraftTarget = (targetKey: string) => {
+    setDraftTargetKeys((current) => (
+      current.includes(targetKey)
+        ? current.filter((key) => key !== targetKey)
+        : [...current, targetKey]
+    ));
+  };
+
+  const saveAssignments = async () => {
+    if (!selectedSkill) return;
+    setSaving(true);
     try {
-      const data = await api.getSkillsStats();
-      setStats(data);
-    } catch (error) {
-      console.error('Error loading skill stats:', error);
+      await api.replaceSkillAssignments(selectedSkill.skill_key, draftTargetKeys);
+      await loadOverview();
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleToggleSkill = async (skillId: string) => {
-    try {
-      await api.toggleSkill(skillId);
-      loadSkills();
-      loadStats();
-    } catch (error) {
-      console.error('Error toggling skill:', error);
-    }
-  };
-
-  const handleDeleteSkill = async (skillId: string) => {
-    if (!confirm('Are you sure you want to delete this skill?')) return;
-    try {
-      await api.deleteSkill(skillId);
-      loadSkills();
-      loadStats();
-    } catch (error) {
-      console.error('Error deleting skill:', error);
-    }
-  };
-
-  const handleAddSkill = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await api.createSkill(newSkill);
-      setNewSkill({ name: '', description: '', category: 'custom' });
-      setShowAddForm(false);
-      loadSkills();
-      loadStats();
-    } catch (error) {
-      console.error('Error adding skill:', error);
-    }
-  };
-
-  const getCategoryColor = (category: string) => {
-    const colors: Record<string, string> = {
-      configuration: 'bg-secondary/10 text-secondary border-secondary/30',
-      code_review: 'bg-accent/10 text-accent border-accent/30',
-      documentation: 'bg-primary/10 text-primary border-primary/30',
-      security: 'bg-error/10 text-error border-error/30',
-      automation: 'bg-warning/10 text-warning border-warning/30',
-      development: 'bg-info/10 text-info border-info/30',
-      custom: 'bg-surface text-foreground-muted border-border',
-    };
-    return colors[category] || colors.custom;
+  const handleAddSkill = async (event: React.FormEvent) => {
+    event.preventDefault();
+    await api.createSkill(newSkill);
+    setNewSkill({ name: '', description: '', category: 'custom' });
+    setShowAddForm(false);
+    await loadOverview();
   };
 
   if (loading) {
     return (
       <div className="card p-6">
         <div className="animate-pulse space-y-4">
-          <div className="h-4 bg-surface rounded w-1/3"></div>
-          <div className="h-8 bg-surface rounded w-1/2"></div>
+          <div className="h-4 bg-surface rounded w-1/3" />
+          <div className="h-32 bg-surface rounded" />
         </div>
+      </div>
+    );
+  }
+
+  if (error || !overview) {
+    return (
+      <div className="glass-card border-error/20">
+        <h3 className="text-xl font-bold text-white">Skill Matrix Offline</h3>
+        <p className="text-sm text-muted mt-2">{error || 'No skill data was returned.'}</p>
+        <button onClick={loadOverview} className="btn btn-primary btn-sm mt-5">Retry</button>
       </div>
     );
   }
 
   return (
     <div className="space-y-8 animate-fade-in">
-      {/* Header Section */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-5">
         <div>
-          <h1 className="text-3xl font-black text-white tracking-tight">Skill <span className="text-muted font-light">Laboratory</span></h1>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-            <p className="text-[10px] text-muted font-bold uppercase tracking-[0.2em]">Capability Matrix</p>
-          </div>
+          <h1 className="text-3xl font-black text-white tracking-tight">AI Skill <span className="text-muted font-light">Control Plane</span></h1>
+          <p className="text-sm text-muted mt-2 max-w-3xl">
+            Unified skills from Claude dashboard config and Codex runtime, assignable to Claude agents, Codex roles, models, and providers.
+          </p>
         </div>
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="btn btn-primary"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-          </svg>
-          <span>Inject Skill</span>
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setShowAddForm(!showAddForm)} className="btn btn-secondary">
+            {showAddForm ? 'Close' : 'New Claude Skill'}
+          </button>
+          <button onClick={loadOverview} className="btn btn-primary">Refresh</button>
+        </div>
       </div>
 
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {[
-            { label: 'Total Matrix', value: stats.total, color: 'var(--foreground)' },
-            { label: 'Active State', value: stats.enabled, color: 'var(--accent)' },
-            { label: 'Offline', value: stats.disabled, color: 'var(--foreground-muted)' },
-            { label: 'Custom Nodes', value: stats.categories?.custom || 0, color: 'var(--primary)' }
-          ].map((stat, i) => (
-            <div key={i} className="glass-card relative overflow-hidden group">
-              <div className="text-2xl font-black mb-1 group-hover:scale-110 transition-transform origin-left" style={{ color: stat.color }}>{stat.value}</div>
-              <div className="text-[10px] text-muted font-bold uppercase tracking-widest">{stat.label}</div>
-              <div className="absolute top-0 right-0 w-16 h-16 bg-white/[0.02] rounded-bl-full -mr-4 -mt-4 group-hover:bg-primary/20 transition-colors" />
-            </div>
-          ))}
-        </div>
-      )}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+        {[
+          { label: 'Unified Skills', value: overview.summary.skills },
+          { label: 'Claude Skills', value: overview.summary.claude_skills },
+          { label: 'Codex Skills', value: overview.summary.codex_skills },
+          { label: 'Assignments', value: overview.summary.assignments },
+        ].map((item) => (
+          <div key={item.label} className="glass-card">
+            <div className="text-3xl font-black text-white">{item.value}</div>
+            <div className="text-[10px] text-muted font-black uppercase tracking-widest mt-2">{item.label}</div>
+          </div>
+        ))}
+      </div>
 
       {showAddForm && (
-        <form onSubmit={handleAddSkill} className="glass-card border-primary border-opacity-20 animate-fade-in">
-          <h3 className="text-xl font-bold text-white mb-6">Initialize New Capability</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-muted uppercase tracking-widest ml-1">Identity Name</label>
-              <input
-                type="text"
-                value={newSkill.name}
-                onChange={(e) => setNewSkill({ ...newSkill, name: e.target.value })}
-                className="input w-full"
-                placeholder="e.g. pattern-recognition"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-muted uppercase tracking-widest ml-1">Capability Category</label>
-              <select
-                value={newSkill.category}
-                onChange={(e) => setNewSkill({ ...newSkill, category: e.target.value })}
-                className="select w-full"
-              >
-                <option value="custom">Custom</option>
-                <option value="configuration">Configuration</option>
-                <option value="code_review">Code Review</option>
-                <option value="documentation">Documentation</option>
-                <option value="security">Security</option>
-                <option value="automation">Automation</option>
-                <option value="development">Development</option>
-              </select>
-            </div>
-            <div className="md:col-span-2 space-y-2">
-              <label className="text-[10px] font-black text-muted uppercase tracking-widest ml-1">Operational Description</label>
-              <textarea
-                value={newSkill.description}
-                onChange={(e) => setNewSkill({ ...newSkill, description: e.target.value })}
-                className="input w-full min-h-[100px] resize-y"
-                placeholder="Define the primary operational objective of this skill..."
-                rows={4}
-                required
-              />
-            </div>
-          </div>
-          <div className="flex gap-4">
-            <button type="submit" className="btn btn-primary flex-1">Register Skill Node</button>
-            <button type="button" onClick={() => setShowAddForm(false)} className="btn btn-secondary px-8">Dismiss</button>
+        <form onSubmit={handleAddSkill} className="glass-card border-primary/20">
+          <h3 className="text-xl font-bold text-white mb-5">Register Claude Dashboard Skill</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <input
+              type="text"
+              value={newSkill.name}
+              onChange={(event) => setNewSkill({ ...newSkill, name: event.target.value })}
+              className="input"
+              placeholder="skill-name"
+              required
+            />
+            <input
+              type="text"
+              value={newSkill.category}
+              onChange={(event) => setNewSkill({ ...newSkill, category: event.target.value })}
+              className="input"
+              placeholder="category"
+            />
+            <button type="submit" className="btn btn-primary">Create Skill</button>
+            <textarea
+              value={newSkill.description}
+              onChange={(event) => setNewSkill({ ...newSkill, description: event.target.value })}
+              className="textarea md:col-span-3"
+              placeholder="What this skill enables..."
+              required
+            />
           </div>
         </form>
       )}
 
-      <div className="space-y-4">
-        {skills.map((skill) => (
-          <div
-            key={skill.id}
-            className={`glass-card flex items-start justify-between group ${
-              !skill.enabled ? 'opacity-40 grayscale pointer-events-none' : ''
-            }`}
-          >
-            <div className="flex flex-col flex-1 gap-4">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 group-hover:border-primary group-hover:bg-primary/10 transition-all">
-                    <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                  </div>
-                  <div>
-                    <h4 className="text-lg font-bold text-white tracking-tight">{skill.name}</h4>
-                    <span className="text-xs text-secondary">{skill.category}</span>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span className="px-2 py-0.5 rounded-md bg-accent/10 border border-accent/20 text-[9px] font-black text-accent uppercase tracking-wider">
-                    {skill.version || 'v1.0'}
-                  </span>
-                  <span className="text-[9px] text-muted font-mono">{skill.language || 'typescript'}</span>
-                </div>
-              </div>
-              <p className="text-sm text-muted leading-relaxed max-w-2xl">{skill.description}</p>
-              <div className="flex items-center gap-4 mt-3">
-                <div className="p-3 rounded-xl bg-surface border border-border group-hover:bg-white/5 transition-colors">
-                  <span className="text-[10px] font-black text-white/20 uppercase tracking-widest block mb-1">Entry Point</span>
-                  <span className="text-[11px] text-white font-mono break-all">{skill.file_path || 'src/skills/default.ts'}</span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {skill.tags?.map((tag: string) => (
-                    <span key={tag} className="px-2 py-0.5 rounded-md bg-secondary/10 border border-secondary/20 text-[9px] font-bold text-secondary uppercase tracking-tighter">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
+      <div className="grid grid-cols-1 xl:grid-cols-[1.15fr_0.85fr] gap-8">
+        <section className="space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-white">Unified Skill Catalog</h2>
+              <p className="text-[10px] text-muted font-bold uppercase tracking-widest mt-1">Claude + Codex capabilities</p>
             </div>
-            <div className="flex items-center gap-6 pl-8 border-l border-white/5">
-              <button
-                onClick={() => handleToggleSkill(skill.id)}
-                className={`switch ${skill.enabled ? 'active' : ''}`}
-                title={skill.enabled ? 'Deactivate' : 'Activate'}
-              />
-              <button
-                onClick={() => handleDeleteSkill(skill.id)}
-                className="btn btn-secondary p-1.5 hover:text-red-500 opacity-0 group-hover:opacity-100"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
+            <div className="flex flex-wrap gap-2">
+              {(['all', 'claude', 'codex-system', 'codex-plugin', 'codex-user'] as const).map((source) => (
+                <button
+                  key={source}
+                  onClick={() => setSelectedSource(source)}
+                  className={`btn btn-sm ${selectedSource === source ? 'btn-primary' : 'btn-secondary'}`}
+                >
+                  {sourceLabels[source]}
+                </button>
+              ))}
             </div>
           </div>
-        ))}
 
-        {skills.length === 0 && !loading && (
-          <div className="glass-card p-20 text-center border-dashed border-white/10">
-            <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
-              <svg className="w-10 h-10 text-white/10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
+          <div className="card p-0 overflow-hidden">
+            <div className="max-h-[660px] overflow-y-auto custom-scrollbar divide-y divide-border/60">
+              {visibleSkills.map((skill) => {
+                const assignedTargets = getSkillTargets(skill, overview.targets);
+                const isSelected = skill.skill_key === selectedSkillKey;
+                return (
+                  <button
+                    key={skill.skill_key}
+                    onClick={() => handleSelectSkill(skill)}
+                    className={`w-full text-left p-5 transition-colors ${isSelected ? 'bg-primary/10' : 'hover:bg-white/[0.03]'}`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <h3 className="text-base font-black text-white truncate">{skill.name}</h3>
+                        <p className="text-sm text-muted mt-2 leading-relaxed">{skill.description}</p>
+                      </div>
+                      <span className={`badge shrink-0 ${sourceStyles[skill.source]}`}>{sourceLabels[skill.source]}</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 mt-4">
+                      <span className="text-[10px] px-2 py-1 rounded-md bg-white/5 text-muted border border-white/5 uppercase tracking-wider">
+                        {skill.category}
+                      </span>
+                      {assignedTargets.length === 0 ? (
+                        <span className="text-[10px] text-white/30">No assigned targets</span>
+                      ) : (
+                        assignedTargets.slice(0, 4).map((target) => (
+                          <span key={target.target_key} className="text-[10px] px-2 py-1 rounded-md bg-accent/10 text-accent border border-accent/20">
+                            {target.name}
+                          </span>
+                        ))
+                      )}
+                      {assignedTargets.length > 4 && (
+                        <span className="text-[10px] text-muted">+{assignedTargets.length - 4}</span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">No Skills Injected</h3>
-            <p className="text-sm text-muted">Register a new capability to expand your agents' operational range.</p>
           </div>
-        )}
+        </section>
+
+        <aside className="space-y-5">
+          <div className="glass-card">
+            {selectedSkill ? (
+              <>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] text-primary font-black uppercase tracking-[0.3em]">Assignment Editor</p>
+                    <h2 className="text-2xl font-black text-white mt-2">{selectedSkill.name}</h2>
+                    <p className="text-sm text-muted mt-2">{selectedSkill.description}</p>
+                  </div>
+                  <span className={`badge ${sourceStyles[selectedSkill.source]}`}>{sourceLabels[selectedSkill.source]}</span>
+                </div>
+
+                <div className="space-y-5 mt-7">
+                  {targetOrder.map((type) => {
+                    const targets = targetGroups.get(type) || [];
+                    return (
+                      <div key={type} className="space-y-3">
+                        <h3 className="text-[10px] font-black text-muted uppercase tracking-widest">{targetLabels[type]}</h3>
+                        {targets.length === 0 ? (
+                          <p className="text-xs text-white/30">No targets registered.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {targets.map((target) => (
+                              <label key={target.target_key} className="flex items-center justify-between gap-4 p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 cursor-pointer">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-bold text-white truncate">{target.name}</div>
+                                  <div className="text-[10px] text-muted font-mono truncate">{target.target_key}</div>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  checked={draftTargetKeys.includes(target.target_key)}
+                                  onChange={() => toggleDraftTarget(target.target_key)}
+                                  className="w-4 h-4 accent-[var(--primary)]"
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={saveAssignments}
+                  disabled={saving}
+                  className="btn btn-primary w-full mt-7"
+                >
+                  {saving ? 'Saving...' : 'Save Assignments'}
+                </button>
+              </>
+            ) : (
+              <div className="text-center py-10">
+                <h3 className="text-lg font-bold text-white">Select a Skill</h3>
+                <p className="text-sm text-muted mt-2">Choose a capability to assign it across AI targets.</p>
+              </div>
+            )}
+          </div>
+        </aside>
       </div>
     </div>
   );

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { api } from '@/lib/api';
+import { AIControlPlaneOverview } from '@/types';
 
 interface Provider {
   id: string;
@@ -39,19 +41,27 @@ export default function AIProviderManager() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { connected: boolean; message: string }>>({});
+  const [overview, setOverview] = useState<AIControlPlaneOverview | null>(null);
   const [newProvider, setNewProvider] = useState<Partial<Provider>>({
     name: '', type: 'anthropic', api_key: '', base_url: '', models: []
   });
 
-  useEffect(() => { loadProviders(); }, []);
-
   const loadProviders = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/providers');
-      setProviders(await res.json());
+      const [res, aiOverview] = await Promise.all([
+        fetch('http://localhost:8000/api/providers'),
+        api.getAIOverview()
+      ]);
+      if (res.ok) {
+        setProviders(await res.json());
+      }
+      setOverview(aiOverview);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { loadProviders(); }, []);
 
   const addProvider = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,11 +205,20 @@ export default function AIProviderManager() {
               </div>
             </div>
 
-            {/* Models */}
-            <div className="flex flex-wrap gap-1 mb-4">
-              {(p.models || []).map((m, i) => (
-                <span key={i} className="px-2 py-1 bg-zinc-800/50 rounded-md text-[10px] text-zinc-400 font-mono">{m}</span>
-              ))}
+            {/* Models & Skills */}
+            <div className="mb-4 space-y-2">
+              <div className="flex flex-wrap gap-1">
+                {(p.models || []).map((m, i) => (
+                  <span key={i} className="px-2 py-1 bg-zinc-800/50 rounded-md text-[10px] text-zinc-400 font-mono">{m}</span>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {overview?.skills.filter(s => s.assigned_targets.some(t => t.target_key === `provider:${p.id}`)).map(skill => (
+                  <span key={skill.skill_key} className="px-2 py-1 bg-white/10 border border-white/20 rounded-md text-[9px] font-bold text-white/80">
+                    {skill.name}
+                  </span>
+                ))}
+              </div>
             </div>
 
             {/* API Key Status */}

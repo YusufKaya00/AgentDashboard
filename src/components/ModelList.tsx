@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { AIModel } from '@/types';
+import { useState, useEffect } from 'react';
+import { AIModel, AIControlPlaneOverview } from '@/types';
 import { api } from '@/lib/api';
 
 interface ModelListProps {
@@ -30,6 +30,11 @@ export default function ModelList({ models, onRefresh }: ModelListProps) {
   });
 
   const [isEditing, setIsEditing] = useState(false);
+  const [overview, setOverview] = useState<AIControlPlaneOverview | null>(null);
+
+  useEffect(() => {
+    api.getAIOverview().then(setOverview);
+  }, [models]); // refresh overview when models change
 
   const handleCreate = () => {
     setFormData({
@@ -164,11 +169,14 @@ export default function ModelList({ models, onRefresh }: ModelListProps) {
                   </div>
                   
                   <div className="flex flex-wrap gap-2">
-                    {model.capabilities?.map((cap: string) => (
-                      <span key={cap} className="px-2 py-0.5 rounded-md bg-white/5 border border-white/5 text-[9px] font-bold text-white/60 group-hover:text-white transition-colors">
-                        {cap}
+                    {overview?.skills.filter(s => s.assigned_targets.some(t => t.target_key === `model:${model.id}`)).map((skill) => (
+                      <span key={skill.skill_key} className="px-2 py-0.5 rounded-md bg-white/5 border border-white/5 text-[9px] font-bold text-white/60 group-hover:text-white transition-colors">
+                        {skill.name}
                       </span>
                     ))}
+                    {(!overview?.skills.filter(s => s.assigned_targets.some(t => t.target_key === `model:${model.id}`)).length) && (
+                      <span className="text-[10px] text-muted">No skills assigned</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -225,7 +233,7 @@ export default function ModelList({ models, onRefresh }: ModelListProps) {
                 </label>
                 <select
                   value={formData.provider}
-                  onChange={(e) => setFormData({ ...formData, provider: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, provider: e.target.value })}
                   className="select"
                 >
                   <option value="anthropic">Anthropic</option>
@@ -262,20 +270,11 @@ export default function ModelList({ models, onRefresh }: ModelListProps) {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-foreground-muted mb-2">
-                  Capabilities (comma separated)
+                  Assigned Skills (Control Plane)
                 </label>
-                <input
-                  type="text"
-                  value={formData.capabilities.join(', ')}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      capabilities: e.target.value.split(',').map((c) => c.trim()),
-                    })
-                  }
-                  className="input"
-                  placeholder="text, code, analysis"
-                />
+                <div className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl">
+                  <p className="text-xs text-muted">Manage assignments in the AI Skill Control Plane.</p>
+                </div>
               </div>
               <div className="flex gap-3 pt-4">
                 <button

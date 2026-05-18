@@ -125,3 +125,93 @@ export interface Skill {
   usage_count?: number;
   created_at: string;
 }
+
+export interface CodexAgent {
+  id: string;
+  name: string;
+  role: string;
+  description: string;
+  capabilities: string[];
+}
+
+export interface CodexSkill {
+  id: string;
+  name: string;
+  description: string;
+  source: 'system' | 'plugin' | 'user';
+  file_path: string;
+  updated_at: string | null;
+}
+
+export interface CodexOverview {
+  runtime: {
+    name: 'Codex';
+    codex_home: string;
+    workspace_dir: string;
+    available: boolean;
+  };
+  agents: CodexAgent[];
+  skills: {
+    total: number;
+    by_source: Record<'system' | 'plugin' | 'user', number>;
+    items: CodexSkill[];
+  };
+  config: {
+    files: Array<{ name: string; exists: boolean; updated_at: string | null }>;
+    redacted: Record<string, string>;
+  };
+  sessions: {
+    total: number;
+    recent: Array<Record<string, unknown>>;
+  };
+}
+
+export type SkillSource = 'claude' | 'codex-system' | 'codex-plugin' | 'codex-user';
+export type AITargetType = 'claude_agent' | 'codex_agent' | 'model' | 'provider';
+
+export interface SkillAssignment {
+  skill_key: string;
+  skill_id: string;
+  skill_source: SkillSource;
+  target_key: string;
+  target_type: AITargetType;
+  target_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UnifiedSkill {
+  skill_key: string;
+  id: string;
+  name: string;
+  description: string;
+  source: SkillSource;
+  origin: 'claude' | 'codex';
+  category: string;
+  enabled: boolean;
+  file_path?: string;
+  assigned_targets: SkillAssignment[];
+}
+
+export interface AITarget {
+  target_key: string;
+  id: string;
+  name: string;
+  type: AITargetType;
+  provider?: string;
+  status?: string;
+  metadata: Record<string, string | boolean | undefined>;
+}
+
+export interface AIControlPlaneOverview {
+  skills: UnifiedSkill[];
+  targets: AITarget[];
+  assignments: SkillAssignment[];
+  summary: {
+    skills: number;
+    targets: number;
+    assignments: number;
+    codex_skills: number;
+    claude_skills: number;
+  };
+}

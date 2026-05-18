@@ -1,0 +1,12 @@
+[
+  {
+    "skill_key": "codex-plugin:brainstorming",
+    "skill_id": "brainstorming",
+    "skill_source": "codex-plugin",
+    "target_key": "claude_agent:team_leader",
+    "target_type": "claude_agent",
+    "target_id": "team_leader",
+    "created_at": "2026-05-18T09:39:51.933Z",
+    "updated_at": "2026-05-18T09:39:54.770Z"
+  }
+]

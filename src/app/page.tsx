@@ -17,6 +17,9 @@ import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import Terminal from '@/components/Terminal';
 import AIProviderManager from '@/components/AIProviderManager';
 import CLAUDEEditor from '@/components/CLAUDEEditor';
+import CodexControlPanel from '@/components/CodexControlPanel';
+
+type DashboardTab = 'dashboard' | 'agents' | 'skills' | 'hooks' | 'models' | 'activity' | 'clisessions' | 'codex' | 'system' | 'tasks' | 'analytics' | 'terminal' | 'providers' | 'claude-editor';
 
 export default function Home() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -24,7 +27,7 @@ export default function Home() {
   const [hooks, setHooks] = useState<Hook[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
   const [activities, setActivities] = useState<ActivityLog[]>([]);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'agents' | 'skills' | 'hooks' | 'models' | 'activity' | 'clisessions' | 'system' | 'tasks' | 'analytics' | 'terminal' | 'providers' | 'claude-editor'>('dashboard');
+  const [activeTab, setActiveTab] = useState<DashboardTab>('dashboard');
 
   useEffect(() => {
     loadInitialData();
@@ -179,6 +182,13 @@ export default function Home() {
         <div className="animate-fade-in space-y-6">
           <PageHeader title="CLI" subtitle="Sessions" accent="Active" />
           <CLISessions />
+        </div>
+      )}
+
+      {activeTab === 'codex' && (
+        <div className="animate-fade-in space-y-6">
+          <PageHeader title="Codex" subtitle="Control" accent="Runtime" />
+          <CodexControlPanel />
         </div>
       )}
 
