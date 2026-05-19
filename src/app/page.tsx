@@ -20,7 +20,7 @@ import CLAUDEEditor from '@/components/CLAUDEEditor';
 import CodexControlPanel from '@/components/CodexControlPanel';
 import AntigravityControlPanel from '@/components/AntigravityControlPanel';
 
-type DashboardTab = 'dashboard' | 'agents' | 'antigravity' | 'skills' | 'claude-editor' | 'clisessions' | 'codex' | 'terminal' | 'tasks' | 'activity' | 'system';
+type DashboardTab = 'dashboard' | 'agents' | 'antigravity' | 'skills' | 'claude-editor' | 'clisessions' | 'codex' | 'terminal' | 'tasks' | 'activity' | 'system' | 'hooks';
 
 export default function Home() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -255,6 +255,13 @@ export default function Home() {
         <div className="animate-fade-in space-y-6">
           <PageHeader title="System" subtitle="Diagnostics" accent="Resources" />
           <SystemStatus />
+        </div>
+      )}
+
+      {activeTab === 'hooks' && (
+        <div className="animate-fade-in space-y-6">
+          <PageHeader title="System" subtitle="Hooks" accent="Automation" />
+          <HookList hooks={hooks} onRefresh={refreshHooks} />
         </div>
       )}
     </DashboardLayout>
