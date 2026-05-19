@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { api } from '@/lib/api';
 
 interface TerminalMessage {
   id: string;
@@ -18,7 +19,19 @@ interface TerminalTab {
 
 export default function Terminal() {
   const [tabs, setTabs] = useState<TerminalTab[]>([
-    { id: '1', name: 'Terminal 1', messages: [], active: true },
+    {
+      id: 'default',
+      name: 'System Terminal',
+      messages: [
+        {
+          id: 'welcome',
+          type: 'success',
+          content: 'Nexus Multi-Agent Control Plane [Tnega Version 1.0.0]\nType "help" to view system CLI commands.\nConnection established.',
+          timestamp: new Date().toLocaleTimeString(),
+        },
+      ],
+      active: true,
+    },
   ]);
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<string[]>([]);
@@ -27,9 +40,7 @@ export default function Terminal() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [tabs]);
 
   useEffect(() => {
@@ -40,12 +51,11 @@ export default function Terminal() {
 
   const addMessage = (type: TerminalMessage['type'], content: string) => {
     const message: TerminalMessage = {
-      id: Date.now().toString(),
+      id: Math.random().toString(36).substr(2, 9),
       type,
       content,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date().toLocaleTimeString(),
     };
-
     setTabs(prev => prev.map(tab =>
       tab.active ? { ...tab, messages: [...tab.messages, message] } : tab
     ));
@@ -58,22 +68,16 @@ export default function Terminal() {
     setHistory(prev => [...prev, command]);
     setHistoryIndex(-1);
 
-    // Simulate command execution
     try {
-      const response = await fetch('http://localhost:8000/api/terminal/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        addMessage('output', result.output || 'Command executed successfully');
+      const result = await api.executeTerminalCommand(command);
+      if (result && result.output) {
+        addMessage('output', result.output);
+      } else if (result && result.error) {
+        addMessage('error', result.error);
       } else {
-        const error = await response.json();
-        addMessage('error', error.error || 'Command failed');
+        addMessage('output', 'Command executed successfully with no output.');
       }
-    } catch (error) {
+    } catch (error: any) {
       // Fallback to local simulation
       const output = simulateCommand(command);
       addMessage(output.type, output.content);

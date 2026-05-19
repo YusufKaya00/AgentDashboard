@@ -1,7 +1,7 @@
 import type { CodexInventory } from './codexInventory.js';
 
 export type SkillSource = 'claude' | 'codex-system' | 'codex-plugin' | 'codex-user';
-export type TargetType = 'claude_agent' | 'codex_agent' | 'model' | 'provider';
+export type TargetType = 'claude_agent' | 'codex_agent' | 'antigravity_agent' | 'model' | 'provider';
 
 export interface DashboardSkill {
   id: string;
@@ -18,6 +18,7 @@ export interface DashboardAgent {
   name: string;
   status?: string;
   model?: string;
+  capabilities?: string[];
 }
 
 export interface DashboardModel {
@@ -140,7 +141,10 @@ export const buildUnifiedSkills = (
 };
 
 export const buildAITargets = ({ agents, codexAgents, models, providers }: BuildTargetInput): AITarget[] => {
-  const claudeTargets = agents.map((agent) => ({
+  const claudeAgents = agents.filter(a => a.id !== 'antigravity');
+  const antigravityAgents = agents.filter(a => a.id === 'antigravity');
+
+  const claudeTargets = claudeAgents.map((agent) => ({
     target_key: `claude_agent:${agent.id}`,
     id: agent.id,
     name: agent.name,
@@ -150,6 +154,21 @@ export const buildAITargets = ({ agents, codexAgents, models, providers }: Build
     metadata: {
       model: agent.model,
       active: agent.status === 'active',
+      capabilities: agent.capabilities ? agent.capabilities.join(',') : '',
+    },
+  }));
+
+  const antigravityTargets = antigravityAgents.map((agent) => ({
+    target_key: `antigravity_agent:${agent.id}`,
+    id: agent.id,
+    name: agent.name,
+    type: 'antigravity_agent' as const,
+    provider: 'antigravity',
+    status: agent.status,
+    metadata: {
+      model: agent.model,
+      active: agent.status === 'active',
+      capabilities: agent.capabilities ? agent.capabilities.join(',') : 'reasoning,planning,tools-exec',
     },
   }));
 
@@ -163,6 +182,7 @@ export const buildAITargets = ({ agents, codexAgents, models, providers }: Build
     metadata: {
       role: agent.role,
       active: true,
+      capabilities: agent.capabilities ? agent.capabilities.join(',') : 'code-generation,refactor',
     },
   }));
 
@@ -192,7 +212,7 @@ export const buildAITargets = ({ agents, codexAgents, models, providers }: Build
     },
   }));
 
-  return [...claudeTargets, ...codexTargets, ...modelTargets, ...providerTargets];
+  return [...claudeTargets, ...antigravityTargets, ...codexTargets, ...modelTargets, ...providerTargets];
 };
 
 export const replaceSkillAssignments = (

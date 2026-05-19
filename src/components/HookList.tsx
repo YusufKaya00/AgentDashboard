@@ -14,8 +14,9 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
   const [formData, setFormData] = useState({
     name: '',
     type: 'pre' as const,
-    trigger: '',
-    action: '',
+    trigger: 'git.push',
+    action: 'Review code changes for bugs',
+    agent: 'antigravity' as 'antigravity' | 'claude' | 'codex' | 'none',
     enabled: true,
   });
 
@@ -23,8 +24,9 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
     setFormData({
       name: '',
       type: 'pre',
-      trigger: '',
-      action: '',
+      trigger: 'git.push',
+      action: 'Review code changes for bugs',
+      agent: 'antigravity',
       enabled: true,
     });
     setShowModal(true);
@@ -100,54 +102,63 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {hooks.map((hook) => (
-            <div
-              key={hook.id}
-              className="glass-card-sm border border-border group hover:border-primary/20 transition-all flex flex-col"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-surface flex items-center justify-center border border-border group-hover:border-primary group-hover:bg-primary/10 transition-all">
-                    <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+          {hooks.map((hook) => {
+            const isEnabled = hook.active ?? hook.enabled;
+            return (
+              <div
+                key={hook.id}
+                className="glass-card-sm border border-border group hover:border-primary/20 transition-all flex flex-col"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-surface flex items-center justify-center border border-border group-hover:border-primary group-hover:bg-primary/10 transition-all">
+                      <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white tracking-tight group-hover:text-primary transition-colors">{hook.name}</h3>
+                      <span className={`px-2 py-0.5 rounded-md bg-accent/10 border border-accent/20 text-[8px] font-black text-accent uppercase tracking-wider`}>
+                        {hook.type}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white tracking-tight group-hover:text-primary transition-colors">{hook.name}</h3>
-                    <span className={`px-2 py-0.5 rounded-md bg-accent/10 border border-accent/20 text-[8px] font-black text-accent uppercase tracking-wider`}>
-                      {hook.type}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleToggle(hook)}
+                      className={`switch scale-75 ${isEnabled ? 'active' : ''}`}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2 mb-4 flex-1">
+                  <div className="p-2 rounded-lg bg-background border border-border">
+                    <span className="text-[8px] font-black text-muted uppercase tracking-widest block mb-0.5">Trigger</span>
+                    <span className="text-[10px] text-white font-mono truncate block">{hook.trigger}</span>
+                  </div>
+                  <div className="p-2 rounded-lg bg-background border border-border">
+                    <span className="text-[8px] font-black text-muted uppercase tracking-widest block mb-0.5">Executor Agent</span>
+                    <span className="text-[10px] text-accent font-mono truncate block capitalize">
+                      {hook.agent || 'none'}
                     </span>
                   </div>
+                  <div className="p-2 rounded-lg bg-background border border-border">
+                    <span className="text-[8px] font-black text-muted uppercase tracking-widest block mb-0.5">Action / Prompt</span>
+                    <span className="text-[10px] text-primary font-mono truncate block">{hook.action}</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
+
+                <div className="flex justify-end pt-3 border-t border-border mt-auto">
                   <button
-                    onClick={() => handleToggle(hook)}
-                    className={`switch scale-75 ${hook.enabled ? 'active' : ''}`}
-                  />
+                    onClick={() => handleDelete(hook.id)}
+                    className="p-1.5 text-muted hover:text-error transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
                 </div>
               </div>
-
-              <div className="space-y-2 mb-4 flex-1">
-                <div className="p-2 rounded-lg bg-background border border-border">
-                  <span className="text-[8px] font-black text-muted uppercase tracking-widest block mb-0.5">Trigger</span>
-                  <span className="text-[10px] text-white font-mono truncate block">{hook.trigger}</span>
-                </div>
-                <div className="p-2 rounded-lg bg-background border border-border">
-                  <span className="text-[8px] font-black text-muted uppercase tracking-widest block mb-0.5">Action</span>
-                  <span className="text-[10px] text-primary font-mono truncate block">{hook.action}</span>
-                </div>
-              </div>
-
-              <div className="flex justify-end pt-3 border-t border-border mt-auto">
-                <button
-                  onClick={() => handleDelete(hook.id)}
-                  className="p-1.5 text-muted hover:text-error transition-colors"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -185,27 +196,43 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
               </div>
               <div>
                 <label className="block text-sm font-semibold text-foreground-muted mb-2">
-                  Trigger
+                  Trigger Event
                 </label>
-                <input
-                  type="text"
+                <select
                   value={formData.trigger}
                   onChange={(e) => setFormData({ ...formData, trigger: e.target.value })}
-                  className="input"
-                  placeholder="agent.request"
-                  required
-                />
+                  className="select"
+                >
+                  <option value="git.push">git.push (Git Push Event)</option>
+                  <option value="git.commit">git.commit (Git Commit Event)</option>
+                  <option value="file.change">file.change (File Watcher Change)</option>
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-semibold text-foreground-muted mb-2">
-                  Action
+                  Executor Agent
+                </label>
+                <select
+                  value={formData.agent}
+                  onChange={(e) => setFormData({ ...formData, agent: e.target.value as any })}
+                  className="select"
+                >
+                  <option value="antigravity">Antigravity Core</option>
+                  <option value="claude">Claude Code</option>
+                  <option value="codex">Codex Engine</option>
+                  <option value="none">None (Direct Shell Action)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-foreground-muted mb-2">
+                  {formData.agent === 'none' ? 'Action / Shell Command' : 'A.I. Prompt / Instruction'}
                 </label>
                 <input
                   type="text"
                   value={formData.action}
                   onChange={(e) => setFormData({ ...formData, action: e.target.value })}
                   className="input"
-                  placeholder="log_request"
+                  placeholder={formData.agent === 'none' ? 'e.g. echo "Running tests..."' : 'e.g. Inspect changes for security vulnerabilities'}
                   required
                 />
               </div>

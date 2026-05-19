@@ -22,11 +22,12 @@ const sourceStyles: Record<SkillSource, string> = {
 const targetLabels: Record<AITargetType, string> = {
   claude_agent: 'Claude Agents',
   codex_agent: 'Codex Roles',
+  antigravity_agent: 'Antigravity Core',
   model: 'Models',
   provider: 'Providers',
 };
 
-const targetOrder: AITargetType[] = ['claude_agent', 'codex_agent', 'model', 'provider'];
+const targetOrder: AITargetType[] = ['claude_agent', 'antigravity_agent', 'codex_agent', 'model', 'provider'];
 
 const getSkillTargets = (skill: UnifiedSkill, targets: AITarget[]) => {
   const assignedKeys = new Set(skill.assigned_targets.map((assignment) => assignment.target_key));

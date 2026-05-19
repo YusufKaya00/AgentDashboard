@@ -20,7 +20,9 @@ export interface Hook {
   type: 'pre' | 'post' | 'error';
   trigger: string;
   action: string;
-  enabled: boolean;
+  enabled?: boolean;
+  active?: boolean;
+  agent?: 'antigravity' | 'claude' | 'codex' | 'none';
   config: Record<string, any>;
   created_at: string;
 }
@@ -70,13 +72,19 @@ export interface Message {
 
 export interface Task {
   id: string;
-  agent_id: string;
+  title: string;
   description: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  priority: 'P0' | 'P1' | 'P2' | 'P3';
+  status: 'pending' | 'in_progress' | 'completed' | 'blocked' | 'failed';
+  assigned_to: string;
+  dependencies?: string[];
+  estimated_hours?: number;
+  command?: string;
   result?: string;
   created_at: string;
+  updated_at?: string;
   completed_at?: string;
-  metadata: Record<string, any>;
+  metadata?: Record<string, any>;
 }
 
 export interface Memory {
@@ -167,7 +175,7 @@ export interface CodexOverview {
 }
 
 export type SkillSource = 'claude' | 'codex-system' | 'codex-plugin' | 'codex-user';
-export type AITargetType = 'claude_agent' | 'codex_agent' | 'model' | 'provider';
+export type AITargetType = 'claude_agent' | 'codex_agent' | 'antigravity_agent' | 'model' | 'provider';
 
 export interface SkillAssignment {
   skill_key: string;
@@ -214,4 +222,15 @@ export interface AIControlPlaneOverview {
     codex_skills: number;
     claude_skills: number;
   };
+}
+
+export interface AntigravityOverview {
+  antigravity_home: string;
+  workspace_dir: string;
+  files: Array<{
+    name: string;
+    exists: boolean;
+    size: number;
+    updated_at: string | null;
+  }>;
 }

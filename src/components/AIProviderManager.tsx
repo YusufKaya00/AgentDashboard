@@ -48,13 +48,11 @@ export default function AIProviderManager() {
 
   const loadProviders = async () => {
     try {
-      const [res, aiOverview] = await Promise.all([
-        fetch('http://localhost:8000/api/providers'),
+      const [providersData, aiOverview] = await Promise.all([
+        api.getProviders(),
         api.getAIOverview()
       ]);
-      if (res.ok) {
-        setProviders(await res.json());
-      }
+      setProviders(providersData);
       setOverview(aiOverview);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -66,11 +64,7 @@ export default function AIProviderManager() {
   const addProvider = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await fetch('http://localhost:8000/api/providers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newProvider)
-      });
+      await api.createProvider(newProvider);
       setShowAddForm(false);
       setNewProvider({ name: '', type: 'anthropic', api_key: '', base_url: '', models: [] });
       loadProviders();
@@ -79,15 +73,14 @@ export default function AIProviderManager() {
 
   const deleteProvider = async (id: string) => {
     if (!confirm('Delete this provider?')) return;
-    await fetch(`http://localhost:8000/api/providers/${id}`, { method: 'DELETE' });
+    await api.deleteProvider(id);
     loadProviders();
   };
 
   const testConnection = async (id: string) => {
     setTesting(id);
     try {
-      const res = await fetch(`http://localhost:8000/api/providers/${id}/test`, { method: 'POST' });
-      const result = await res.json();
+      const result = await api.testProvider(id);
       setTestResults(prev => ({ ...prev, [id]: result }));
     } catch (e) { setTestResults(prev => ({ ...prev, [id]: { connected: false, message: 'Network error' } })); }
     finally { setTesting(null); }

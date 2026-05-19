@@ -1,7 +1,7 @@
 // API Client
 import type { AIControlPlaneOverview, AITarget, SkillAssignment } from '@/types';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = 'http://127.0.0.1:8000/api';
 
 export const api = {
   // Agents
@@ -363,6 +363,12 @@ export const api = {
     return res.json();
   },
 
+  // Antigravity
+  getAntigravityOverview: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/antigravity/overview`);
+    return res.json();
+  },
+
   // General AI Control Plane
   getAIOverview: async (): Promise<AIControlPlaneOverview> => {
     const res = await fetch(`${API_BASE}/ai/overview`);
@@ -384,11 +390,68 @@ export const api = {
     });
     return res.json();
   },
+
+  // Providers
+  getProviders: async (): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/providers`);
+    return res.json();
+  },
+  createProvider: async (provider: any): Promise<any> => {
+    const res = await fetch(`${API_BASE}/providers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(provider),
+    });
+    return res.json();
+  },
+  deleteProvider: async (id: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/providers/${id}`, {
+      method: 'DELETE',
+    });
+    return res.json();
+  },
+  testProvider: async (id: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/providers/${id}/test`, {
+      method: 'POST',
+    });
+    return res.json();
+  },
+
+  // CLAUDE.md and Skill Syncing
+  getClaudeMd: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/claude-md`);
+    return res.json();
+  },
+  updateClaudeMd: async (content: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/claude-md`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    });
+    return res.json();
+  },
+  syncAllSkills: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/skills/sync-all`, {
+      method: 'POST',
+    });
+    return res.json();
+  },
+
+  // Terminal Execution
+  executeTerminalCommand: async (command: string): Promise<any> => {
+    const res = await fetch(`${API_BASE}/terminal/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command }),
+    });
+    return res.json();
+  },
 };
 
 // WebSocket connection
 export const connectWebSocket = (onMessage: (data: any) => void) => {
-  const ws = new WebSocket('ws://localhost:8000/ws');
+  const host = typeof window !== 'undefined' ? window.location.host.split(':')[0] + ':8000' : '127.0.0.1:8000';
+  const ws = new WebSocket(`ws://${host}/ws`);
   let heartbeatInterval: NodeJS.Timeout | null = null;
 
   ws.onopen = () => {

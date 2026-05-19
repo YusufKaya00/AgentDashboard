@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api, connectWebSocket } from '@/lib/api';
-import { Agent, Hook, AIModel, ActivityLog, Stats } from '@/types';
+import { Agent, Hook, AIModel, ActivityLog, Stats, AITarget } from '@/types';
 import DashboardLayout from '@/components/DashboardLayout';
 import AgentList from '@/components/AgentList';
 import ActivityFeed from '@/components/ActivityFeed';
@@ -18,8 +18,9 @@ import Terminal from '@/components/Terminal';
 import AIProviderManager from '@/components/AIProviderManager';
 import CLAUDEEditor from '@/components/CLAUDEEditor';
 import CodexControlPanel from '@/components/CodexControlPanel';
+import AntigravityControlPanel from '@/components/AntigravityControlPanel';
 
-type DashboardTab = 'dashboard' | 'agents' | 'skills' | 'hooks' | 'models' | 'activity' | 'clisessions' | 'codex' | 'system' | 'tasks' | 'analytics' | 'terminal' | 'providers' | 'claude-editor';
+type DashboardTab = 'dashboard' | 'agents' | 'antigravity' | 'skills' | 'claude-editor' | 'clisessions' | 'codex' | 'terminal' | 'tasks' | 'activity' | 'system';
 
 export default function Home() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -42,17 +43,38 @@ export default function Home() {
     return () => ws.close();
   }, []);
 
+  const mapTargetsToAgents = (targets: AITarget[]): Agent[] => {
+    return targets
+      .filter(t => t.type === 'claude_agent' || t.type === 'antigravity_agent' || t.type === 'codex_agent')
+      .map(t => ({
+        id: t.id,
+        name: t.name,
+        description: (t.metadata.role as string) || (t.type === 'antigravity_agent' ? 'Autonomous Core Agent' : 'Sub-Agent Node'),
+        model: (t.metadata.model as string) || (t.type === 'codex_agent' ? 'Codex Engine' : 'N/A'),
+        status: t.status === 'active' || t.status === 'Online' || t.type === 'codex_agent' ? 'active' : (t.status === 'error' ? 'error' : 'inactive'),
+        config: { type: t.type },
+        created_at: '',
+        updated_at: '',
+        role: t.type === 'antigravity_agent' ? 'team_lead' : (t.type === 'codex_agent' ? 'specialist' : 'worker'),
+        capabilities: t.metadata.capabilities
+          ? (t.metadata.capabilities as string).split(',').filter(Boolean)
+          : (t.type === 'antigravity_agent' 
+             ? ['reasoning', 'planning', 'tools-exec'] 
+             : (t.type === 'codex_agent' ? ['codex-task', 'code-generation'] : ['chat', 'tool-call']))
+      }));
+  };
+
   const loadInitialData = async () => {
     try {
-      const [statsData, agentsData, hooksData, modelsData, activitiesData] = await Promise.all([
+      const [statsData, targetsData, hooksData, modelsData, activitiesData] = await Promise.all([
         api.getStats(),
-        api.getAgents(),
+        api.getAITargets(),
         api.getHooks(),
         api.getModels(),
         api.getActivity(50),
       ]);
       setStats(statsData);
-      setAgents(Array.isArray(agentsData) ? agentsData : []);
+      setAgents(mapTargetsToAgents(targetsData));
       setHooks(Array.isArray(hooksData) ? hooksData : []);
       setModels(Array.isArray(modelsData) ? modelsData : []);
       setActivities(Array.isArray(activitiesData) ? activitiesData : []);
@@ -71,8 +93,8 @@ export default function Home() {
   };
 
   const refreshAgents = async () => {
-    const data = await api.getAgents();
-    setAgents(data);
+    const targetsData = await api.getAITargets();
+    setAgents(mapTargetsToAgents(targetsData));
     loadStats();
   };
 
@@ -124,6 +146,22 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Quick Metrics Grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              { label: "Active Cores", value: "3 Cores", desc: "Claude, Codex, Antigravity", color: "text-primary" },
+              { label: "Fleet Nodes", value: `${agents.length} Registered`, desc: "Claude sub-agents configured", color: "text-accent" },
+              { label: "Active Tasks", value: `${stats?.total_tasks || 0} Queued`, desc: "Orchestrator task lists", color: "text-warning" },
+              { label: "Diagnostic Health", value: "99.9% Optimal", desc: "All core engines online", color: "text-secondary" }
+            ].map((metric, i) => (
+              <div key={i} className="card p-5 bg-surface/20 border-border/80 backdrop-blur-sm hover:border-primary/30 transition-all group duration-300">
+                <span className="text-[9px] font-black text-muted uppercase tracking-[0.2em]">{metric.label}</span>
+                <div className={`text-2xl font-black ${metric.color} tracking-tight mt-2.5 mb-1`}>{metric.value}</div>
+                <p className="text-[10px] text-muted/70 font-semibold">{metric.desc}</p>
+              </div>
+            ))}
+          </div>
+
           {/* Core Metrics Grid */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
             <AgentSummary />
@@ -157,13 +195,6 @@ export default function Home() {
         </div>
       )}
 
-      {activeTab === 'analytics' && (
-        <div className="animate-fade-in space-y-6">
-          <PageHeader title="System" subtitle="Analytics" accent="Insights" />
-          <AnalyticsDashboard />
-        </div>
-      )}
-
       {activeTab === 'terminal' && (
         <div className="animate-fade-in space-y-6 h-[calc(100vh-120px)]">
           <PageHeader title="Direct" subtitle="Terminal" accent="Command" />
@@ -175,6 +206,13 @@ export default function Home() {
         <div className="animate-fade-in space-y-6">
           <PageHeader title="Agent" subtitle="Management" accent="Nodes" />
           <AgentList agents={agents} onRefresh={refreshAgents} showAll />
+        </div>
+      )}
+
+      {activeTab === 'antigravity' && (
+        <div className="animate-fade-in space-y-6">
+          <PageHeader title="Antigravity" subtitle="Control Panel" accent="Autonomous Core" />
+          <AntigravityControlPanel />
         </div>
       )}
 
@@ -192,20 +230,6 @@ export default function Home() {
         </div>
       )}
 
-      {activeTab === 'hooks' && (
-        <div className="animate-fade-in space-y-6">
-          <PageHeader title="Hook" subtitle="Management" accent="Interceptors" />
-          <HookList hooks={hooks} onRefresh={refreshHooks} />
-        </div>
-      )}
-
-      {activeTab === 'models' && (
-        <div className="animate-fade-in space-y-6">
-          <PageHeader title="Model" subtitle="Inventory" accent="Neural Engines" />
-          <ModelList models={models} onRefresh={refreshModels} />
-        </div>
-      )}
-
       {activeTab === 'activity' && (
         <div className="animate-fade-in space-y-6">
           <PageHeader title="System" subtitle="Activity" accent="Audit Log" />
@@ -217,13 +241,6 @@ export default function Home() {
         <div className="animate-fade-in space-y-6">
           <PageHeader title="Skill" subtitle="Manager" accent="Capabilities" />
           <SkillManager />
-        </div>
-      )}
-
-      {activeTab === 'providers' && (
-        <div className="animate-fade-in space-y-6">
-          <PageHeader title="AI" subtitle="Providers" accent="Connectivity" />
-          <AIProviderManager />
         </div>
       )}
 

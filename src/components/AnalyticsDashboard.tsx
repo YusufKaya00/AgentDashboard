@@ -45,8 +45,7 @@ export default function AnalyticsDashboard() {
 
   const loadAnalytics = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/analytics?range=${timeRange}`);
-      const result = await response.json();
+      const result = await api.getAnalytics(timeRange);
       setData(result);
     } catch (error) {
       console.error('Error loading analytics:', error);

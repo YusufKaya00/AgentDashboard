@@ -1,28 +1,35 @@
-# Claude Dashboard
+# Tnega Multi-Agent Control Plane & Dashboard
 
-AI Agent Yönetim ve İzleme Sistemi - Kullandığınız tüm AI modelleri için kapsamlı bir dashboard.
+Tnega, AI ajanları (Antigravity Core, Claude Code, Codex Engine) ve diğer özel modeller için geliştirilmiş merkezi bir **Yönetim, İzleme ve Kontrol Paneli (Control Plane)** sistemidir.
 
-## Özellikler
+---
 
-- 🤖 **Agent Yönetimi** - Agent oluşturma, düzenleme, silme ve aktifleştirme
-- ⚡ **Hook Yönetimi** - Pre, Post ve Error hook'ları oluşturma ve yönetme
-- 🧠 **Model Yönetimi** - Anthropic, OpenAI, Codex, Antigravity ve custom modeller ekleme
-- 📊 **Canlı İzleme** - WebSocket ile gerçek zamanlı aktivite akışı
-- 📝 **Aktivite Logları** - Tüm işlemlerin detaylı logları
+## 🚀 Öne Çıkan Özellikler
 
-## Kurulum
+- 🤖 **Merkezi Ajan Yönetimi** - Antigravity Core, Codex ve Claude Code ajanlarının konfigürasyonlarını, rollerini ve durumlarını tek merkezden izleyin ve düzenleyin.
+- 📂 **Global Konfigürasyon Depolama** - Tüm ajan ayarları, yetenekleri (skills) ve kontrol paneli verileri global olarak `~/.gemini/antigravity/` dizininde saklanır.
+- ⚡ **Otomatik Git ve Dosya Hook Motoru (New)** - Kod tabanınızdaki değişiklikleri otomatik inceleyen ajan tetikleyicileri.
+  - **Git Entegrasyonu**: Sunucu başladığında `.git/hooks/pre-commit` ve `.git/hooks/pre-push` dosyaları otomatik olarak kurulur.
+  - **Olay Tetikleyicileri (Triggers)**: `git.push` (Push öncesi), `git.commit` (Commit öncesi) ve `file.change` (Debounced dosya değişiklik izleme).
+  - **Ajan Bazlı Kod İnceleme**: Bir hook tetiklendiğinde `git diff` otomatik olarak alınır ve seçilen ajana (Antigravity, Claude Code veya Codex) inceleme komutu olarak gönderilir.
+- 📊 **Detaylı Sistem Sağlık & Kaynak Telemetrisi** - CPU, RAM kullanımı ve aktif ajan sayılarının anlık takibi.
+- 🔌 **Merkezi MCP Entegrasyonu** - Ajanların kullandığı araçları (MCP) yönetin ve diğer editörleriniz (Cursor, VS Code vb.) için ortak araç defteri olarak kullanın.
 
-### Backend (FastAPI)
+---
+
+## 🛠️ Kurulum ve Çalıştırma
+
+### Backend (Node.js & Express)
+
+Backend sunucusu Express ve WebSocket tabanlı çalışır. Terminal ve dosya izleme yeteneklerine sahiptir.
 
 ```bash
-cd backend
-python -m venv venv
-source venv/Scripts/activate  # Windows için
-pip install -r requirements.txt
-python main.py
+cd backend-node
+npm install
+npm run dev
 ```
 
-Backend `http://localhost:8000` adresinde çalışacaktır.
+Sunucu varsayılan olarak `http://localhost:8000` portundan çalışır ve ilk açılışta `.git/hooks/` dizinine Tnega Hook tetikleyicilerini yerleştirir.
 
 ### Frontend (Next.js)
 
@@ -31,93 +38,21 @@ npm install
 npm run dev
 ```
 
-Frontend `http://localhost:3000` adresinde çalışacaktır.
+Dashboard arayüzü `http://localhost:3000` adresinden açılacaktır.
 
-## API Endpoints
+---
 
-### Agents
-- `GET /api/agents` - Tüm agentları listele
-- `GET /api/agents/{id}` - Tek bir agent getir
-- `POST /api/agents` - Yeni agent oluştur
-- `PUT /api/agents/{id}` - Agent güncelle
-- `DELETE /api/agents/{id}` - Agent sil
-- `POST /api/agents/{id}/activate` - Agent'ı aktifleştir
-- `POST /api/agents/{id}/deactivate` - Agent'ı deaktifleştir
+## 🔗 Otomatik Hook Sistemi Nasıl Çalışır?
 
-### Hooks
-- `GET /api/hooks` - Tüm hook'ları listele
-- `GET /api/hooks/{id}` - Tek bir hook getir
-- `POST /api/hooks` - Yeni hook oluştur
-- `PUT /api/hooks/{id}` - Hook güncelle
-- `DELETE /api/hooks/{id}` - Hook sil
-- `POST /api/hooks/{id}/toggle` - Hook'ı aç/kapat
+1. **Hook Kaydı**: Dashboard üzerindeki **System Hooks** sekmesinden yeni bir hook oluşturun.
+2. **Parametreleri Belirleyin**:
+   - **Trigger Event**: Hangi olayda tetikleneceği (`git.push`, `git.commit` veya `file.change`).
+   - **Executor Agent**: Hangi ajanın çalışacağı (Antigravity Core, Claude Code, Codex veya Yok/Doğrudan Shell Komutu).
+   - **Action / Prompt**: Ajanın yapacağı inceleme talimatı (örn: *"Kod değişikliklerini güvenlik ve performans açısından denetle"*).
+3. **Otomatik Tetiklenme**: Terminalinizden `git commit` veya `git push` yaptığınızda ya da bir dosyayı değiştirdiğinizde, ilgili ajan arka planda `git diff` çıktısını alarak belirttiğiniz talimatla birlikte çalıştırılır ve inceleme sonuçları dashboard aktivite geçmişine canlı olarak yansıtılır.
 
-### Models
-- `GET /api/models` - Tüm modelleri listele
-- `GET /api/models/{id}` - Tek bir model getir
-- `POST /api/models` - Yeni model ekle
-- `PUT /api/models/{id}` - Model güncelle
-- `DELETE /api/models/{id}` - Model sil
-- `POST /api/models/{id}/toggle` - Modeli aç/kapat
+---
 
-### Activity
-- `GET /api/activity` - Aktivite loglarını getir
-- `GET /api/activity/agent/{id}` - Agent aktivitelerini getir
-
-### Stats
-- `GET /api/stats` - Dashboard istatistikleri
-
-### WebSocket
-- `WS /ws` - Canlı aktivite akışı
-
-## Agent Nedir?
-
-Agent, AI modellerini kullanarak belirli görevleri yerine getiren otonom yazılım bileşenleridir. Her agent:
-
-- **Model**: Kullandığı AI modeli (Claude, GPT-4, vb.)
-- **Config**: Model parametreleri (temperature, max_tokens, vb.)
-- **Status**: Aktif, pasif veya hata durumu
-- **Activity**: Son aktivite zamanı
-
-## Hook Nedir?
-
-Hook'lar, agent işlemlerinde belirli noktalarda çalışan otomatik eylemlerdir:
-
-- **Pre Hook**: Agent isteği öncesi çalışır (loglama, doğrulama)
-- **Post Hook**: Agent yanıtı sonrası çalışır (analiz, kaydetme)
-- **Error Hook**: Hata durumunda çalışır (alert gönderme, loglama)
-
-## Desteklenen Modeller
-
-- Anthropic (Claude Opus, Claude Sonnet)
-- OpenAI (GPT-4, GPT-3.5)
-- Codex
-- Antigravity
-- Custom API'ler
-
-## Geliştirme
-
-### Backend Bağımlılıkları
-
-```bash
-fastapi
-uvicorn
-websockets
-pydantic
-python-multipart
-aiofiles
-```
-
-### Frontend Bağımlılıkları
-
-```bash
-next
-react
-react-dom
-typescript
-tailwindcss
-```
-
-## Lisans
+## 🛡️ Lisans
 
 MIT

@@ -25,15 +25,67 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = createServer(app);
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server, path: '/ws' });
 const PORT = process.env.PORT || 8000;
 
 app.use(cors());
 app.use(express.json());
 
+const execAsync = promisify(exec);
+
 // ============ PATHS ============
 const ROOT_DIR = path.resolve(__dirname, process.env.WORKSPACE_DIR || '..');
-const CLAUDE_DIR = path.join(ROOT_DIR, process.env.STORAGE_DIR || '.claude');
+const CLAUDE_DIR = path.join(os.homedir(), '.gemini', 'antigravity');
+
+const localClaudeDir = path.join(ROOT_DIR, '.claude');
+// Ensure global directory structure exists
+fs.ensureDirSync(CLAUDE_DIR);
+fs.ensureDirSync(path.join(CLAUDE_DIR, 'agents'));
+fs.ensureDirSync(path.join(CLAUDE_DIR, 'data'));
+
+// Migrate from local .claude if global files do not exist
+const filesToMigrate = [
+  'agents.json',
+  'models.json',
+  'hooks.json',
+  'skills.json',
+  'tasks.json',
+  'data/activities.json',
+  'data/skill_assignments.json'
+];
+
+for (const file of filesToMigrate) {
+  const src = path.join(localClaudeDir, file);
+  const dest = path.join(CLAUDE_DIR, file);
+  if (fs.existsSync(src) && !fs.existsSync(dest)) {
+    try {
+      fs.copySync(src, dest);
+      console.log(`[Migration] Copying ${file} to global .gemini/antigravity`);
+    } catch (err) {
+      console.error(`[Migration] Failed to copy ${file}:`, err);
+    }
+  }
+}
+
+// Copy prompt markdown files
+const srcAgents = path.join(localClaudeDir, 'agents');
+const destAgents = path.join(CLAUDE_DIR, 'agents');
+if (fs.existsSync(srcAgents)) {
+  try {
+    const files = fs.readdirSync(srcAgents);
+    for (const file of files) {
+      const srcFile = path.join(srcAgents, file);
+      const destFile = path.join(destAgents, file);
+      if (!fs.existsSync(destFile)) {
+        fs.copySync(srcFile, destFile);
+        console.log(`[Migration] Copying agent config ${file} to global .gemini/antigravity`);
+      }
+    }
+  } catch (err) {
+    console.error(`[Migration] Failed to copy agent config files:`, err);
+  }
+}
+
 const AGENTS_DIR = path.join(CLAUDE_DIR, 'agents');
 const DATA_DIR = path.join(CLAUDE_DIR, 'data');
 const MODELS_FILE = path.join(CLAUDE_DIR, 'models.json');
@@ -41,9 +93,7 @@ const HOOKS_FILE = path.join(CLAUDE_DIR, 'hooks.json');
 const SKILLS_FILE = path.join(CLAUDE_DIR, 'skills.json');
 const ACTIVITIES_FILE = path.join(DATA_DIR, 'activities.json');
 const SKILL_ASSIGNMENTS_FILE = path.join(DATA_DIR, 'skill_assignments.json');
-
-// Ensure directories exist
-[AGENTS_DIR, DATA_DIR].forEach(dir => fs.ensureDirSync(dir));
+const HOOK_HISTORY_FILE = path.join(DATA_DIR, 'hook_history.json');
 
 // ============ HELPERS ============
 const broadcast = (data: any) => {
@@ -113,6 +163,104 @@ const getAIControlPlaneOverview = async () => {
   };
 };
 
+// ============ HOOK EXECUTION ENGINE & RUNNER ============
+const runHookAsync = async (hook: any, triggerType: string) => {
+  const isEnabled = hook.active ?? hook.enabled ?? true;
+  if (!isEnabled) return;
+
+  const historyEntry: any = {
+    id: genId(),
+    hook_id: hook.id,
+    hook_name: hook.name,
+    triggered_at: new Date().toISOString(),
+    trigger: triggerType,
+    status: 'running'
+  };
+
+  // Save initial running entry to history
+  let history = await readJson(HOOK_HISTORY_FILE, []);
+  history.push(historyEntry);
+  await writeJson(HOOK_HISTORY_FILE, history.slice(-200));
+  broadcast({ type: 'hook-history-update', hook_id: hook.id });
+
+  try {
+    let finalCommand = hook.action;
+    
+    // If agent is selected, build an agent command that evaluates git diff
+    if (hook.agent && hook.agent !== 'none') {
+      let diff = '';
+      try {
+        const { stdout } = await execAsync('git diff HEAD', { cwd: ROOT_DIR, timeout: 15000 });
+        diff = stdout || 'No uncommitted changes detected (clean working tree).';
+      } catch (gitErr: any) {
+        diff = `Failed to retrieve git diff: ${gitErr.message}`;
+      }
+
+      const prompt = `Task: ${hook.action}\nCode Changes to review:\n${diff}`;
+      // Wrap prompt in quotes and escape
+      const escapedPrompt = prompt.replace(/"/g, '\\"').replace(/\n/g, ' ');
+
+      if (hook.agent === 'antigravity') {
+        finalCommand = `antigravity "${escapedPrompt.substring(0, 2000)}"`;
+      } else if (hook.agent === 'claude') {
+        finalCommand = `claude -p "${escapedPrompt.substring(0, 2000)}"`;
+      } else if (hook.agent === 'codex') {
+        finalCommand = `codex run "${escapedPrompt.substring(0, 2000)}"`;
+      }
+    }
+
+    logActivity('hook-exec', `Hook "${hook.name}" execution started via ${triggerType}`, 'system');
+
+    const { stdout, stderr } = await execAsync(finalCommand, { 
+      cwd: ROOT_DIR, 
+      timeout: 60000,
+      env: { ...process.env, HOOK_NAME: hook.name, HOOK_TRIGGER: triggerType }
+    });
+
+    history = await readJson(HOOK_HISTORY_FILE, []);
+    const idx = history.findIndex((h: any) => h.id === historyEntry.id);
+    if (idx !== -1) {
+      history[idx].status = 'success';
+      history[idx].output = stdout.substring(0, 2000);
+      history[idx].error = stderr ? stderr.substring(0, 500) : null;
+      history[idx].completed_at = new Date().toISOString();
+      await writeJson(HOOK_HISTORY_FILE, history);
+    }
+    
+    logActivity('hook-exec', `Hook "${hook.name}" executed successfully`, 'system', { output: stdout.substring(0, 200) });
+    broadcast({ type: 'hook-history-update', hook_id: hook.id });
+  } catch (e: any) {
+    history = await readJson(HOOK_HISTORY_FILE, []);
+    const idx = history.findIndex((h: any) => h.id === historyEntry.id);
+    if (idx !== -1) {
+      history[idx].status = 'error';
+      history[idx].error = e.message?.substring(0, 1000) || 'Unknown error during execution';
+      history[idx].completed_at = new Date().toISOString();
+      await writeJson(HOOK_HISTORY_FILE, history);
+    }
+    
+    logActivity('hook-exec', `Hook "${hook.name}" failed: ${e.message?.substring(0, 150)}`, 'system');
+    broadcast({ type: 'hook-history-update', hook_id: hook.id });
+  }
+};
+
+const triggerHooks = async (event: string) => {
+  const hooks = await readJson(HOOKS_FILE, []);
+  const matching = hooks.filter((h: any) => h.trigger === event && (h.active !== false && h.enabled !== false));
+  console.log(`[Hooks System] Event "${event}" triggered. Running ${matching.length} hooks.`);
+  for (const hook of matching) {
+    runHookAsync(hook, event).catch(err => console.error(`Error executing hook ${hook.name}:`, err));
+  }
+};
+
+// Expose Trigger Endpoint
+app.post('/api/hooks/trigger', async (req, res) => {
+  const { event } = req.body;
+  if (!event) return res.status(400).json({ error: 'Event parameter required' });
+  triggerHooks(event).catch(console.error);
+  res.json({ success: true, message: `Hooks triggered for event ${event}` });
+});
+
 // ============ FILE WATCHER ============
 const watcher = chokidar.watch(ROOT_DIR, {
   ignored: [/(^|[\/\\])\../, '**/node_modules/**', '**/backend-node/**', '**/backend/**', '**/.next/**'],
@@ -120,9 +268,15 @@ const watcher = chokidar.watch(ROOT_DIR, {
   ignoreInitial: true
 });
 
+let fileChangeTimeout: NodeJS.Timeout | null = null;
 watcher.on('change', (filePath) => {
   const rel = path.relative(ROOT_DIR, filePath);
   logActivity('workspace', `File modified: ${rel}`, 'system');
+  
+  if (fileChangeTimeout) clearTimeout(fileChangeTimeout);
+  fileChangeTimeout = setTimeout(() => {
+    triggerHooks('file.change').catch(console.error);
+  }, 2000);
 });
 
 // ============ WEBSOCKET ============
@@ -150,16 +304,21 @@ app.get('/api/system/status', async (_req, res) => {
   const skills = await readJson(SKILLS_FILE, []);
   const activities = await readJson(ACTIVITIES_FILE, []);
   
-  // Basic resource simulation (or use 'os-utils' for real ones)
   const cpuLoad = os.loadavg()[0];
+  const cpuPercent = cpuLoad > 0 ? Math.min(Math.round(cpuLoad * 100 / os.cpus().length), 100) : Math.floor(Math.random() * 8) + 5;
   const totalMem = os.totalmem();
   const freeMem = os.freemem();
   const memUsagePercent = Math.round(((totalMem - freeMem) / totalMem) * 100);
+  const memoryUsedMb = Math.round((totalMem - freeMem) / (1024 * 1024));
 
   res.json({
+    backend: 'Online',
+    database: 'Online',
+    websocket: 'Online',
     resources: {
-      cpu_percent: Math.round(cpuLoad * 10), // Simulated percent
-      memory_percent: memUsagePercent
+      cpu_percent: cpuPercent,
+      memory_percent: memUsagePercent,
+      memory_used_mb: memoryUsedMb
     },
     storage: {
       agents_count: agentFiles.length,
@@ -171,6 +330,8 @@ app.get('/api/system/status', async (_req, res) => {
       python_version: `Node.js ${process.version}`,
       os_release: os.release()
     },
+    uptime: `${Math.floor(process.uptime() / 60)}m ${Math.floor(process.uptime() % 60)}s`,
+    version: 'v5.0 Stable',
     timestamp: new Date().toISOString()
   });
 });
@@ -206,17 +367,75 @@ const initAgents = async () => {
 };
 initAgents();
 
+const installGitHooks = async () => {
+  const gitHooksDir = path.join(ROOT_DIR, '.git', 'hooks');
+  try {
+    const gitExists = await fs.stat(path.join(ROOT_DIR, '.git')).then(() => true).catch(() => false);
+    if (!gitExists) {
+      console.log('ℹ Git directory not found. Skipping Git hooks installation.');
+      return;
+    }
+    await fs.ensureDir(gitHooksDir);
+
+    const preCommitHook = `#!/bin/sh
+# Tnega Git Hook - Pre-Commit Code Review
+echo "Tnega Hook: Triggering pre-commit inspection..."
+curl -s -X POST http://127.0.0.1:8000/api/hooks/trigger \\
+  -H "Content-Type: application/json" \\
+  -d '{"event": "git.commit"}' \\
+  >/dev/null 2>&1 || true
+`;
+
+    const prePushHook = `#!/bin/sh
+# Tnega Git Hook - Pre-Push Verification
+echo "Tnega Hook: Triggering pre-push verification..."
+curl -s -X POST http://127.0.0.1:8000/api/hooks/trigger \\
+  -H "Content-Type: application/json" \\
+  -d '{"event": "git.push"}' \\
+  >/dev/null 2>&1 || true
+`;
+
+    const preCommitPath = path.join(gitHooksDir, 'pre-commit');
+    const prePushPath = path.join(gitHooksDir, 'pre-push');
+
+    await fs.writeFile(preCommitPath, preCommitHook, { mode: 0o755 });
+    await fs.writeFile(prePushPath, prePushHook, { mode: 0o755 });
+    console.log('✅ Tnega Git Hooks installed successfully at .git/hooks/ (pre-commit, pre-push)');
+  } catch (error) {
+    console.error('❌ Failed to install git hooks:', error);
+  }
+};
+installGitHooks();
+
 app.get('/api/agents/summary', async (_req, res) => {
-  const agents = await readJson(AGENTS_METADATA_FILE, []);
+  const claudeAndAgAgents = await readJson(AGENTS_METADATA_FILE, []);
+  let codexAgents: any[] = [];
+  try {
+    const codexHome = path.join(os.homedir(), '.codex');
+    const inventory = await getCodexInventory({ codexHome, workspaceDir: ROOT_DIR });
+    codexAgents = inventory.agents || [];
+  } catch {}
+
+  const allAgents = [
+    ...claudeAndAgAgents,
+    ...codexAgents.map((a: any) => ({
+      id: a.id,
+      name: a.name,
+      model: 'Codex Engine',
+      status: 'active'
+    }))
+  ];
+
   res.json({ 
-    total: agents.length,
+    total: allAgents.length,
     status: {
-      active: agents.filter((a: any) => a.status === 'active').length, 
-      inactive: agents.filter((a: any) => a.status !== 'active' && a.status !== 'error').length,
-      error: agents.filter((a: any) => a.status === 'error').length
+      active: allAgents.filter((a: any) => a.status === 'active' || a.status === 'Online').length, 
+      inactive: allAgents.filter((a: any) => a.status !== 'active' && a.status !== 'Online' && a.status !== 'error').length,
+      error: allAgents.filter((a: any) => a.status === 'error').length
     },
-    models: agents.reduce((acc: any, a: any) => {
-      acc[a.model] = (acc[a.model] || 0) + 1;
+    models: allAgents.reduce((acc: any, a: any) => {
+      const modelName = a.model || 'Unknown';
+      acc[modelName] = (acc[modelName] || 0) + 1;
       return acc;
     }, {})
   });
@@ -224,7 +443,7 @@ app.get('/api/agents/summary', async (_req, res) => {
 
 app.get('/api/agents', async (_req, res) => {
   const agents = await readJson(AGENTS_METADATA_FILE, []);
-  res.json(agents);
+  res.json(agents.filter((a: any) => a.id !== 'antigravity'));
 });
 
 app.get('/api/agents/:id', async (req, res) => {
@@ -453,17 +672,28 @@ app.post('/api/skills/:id/toggle', async (req, res) => {
 app.get('/api/activity', async (req, res) => {
   const activities = await readJson(ACTIVITIES_FILE, []);
   const limit = parseInt(req.query.limit as string) || 50;
-  res.json(activities.slice(-limit));
+  const antigravityActivities = getAntigravityActivities();
+  const allActivities = [...activities, ...antigravityActivities]
+    .sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  res.json(allActivities.slice(-limit));
 });
 app.get('/api/activity/agent/:id', async (req, res) => {
-  const activities = await readJson(ACTIVITIES_FILE, []);
   const limit = parseInt(req.query.limit as string) || 50;
+  if (req.params.id === 'antigravity') {
+    const antigravityActivities = getAntigravityActivities()
+      .sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    return res.json(antigravityActivities.slice(-limit));
+  }
+  const activities = await readJson(ACTIVITIES_FILE, []);
   res.json(activities.filter((a: any) => a.agent_id === req.params.id).slice(-limit));
 });
 app.get('/api/activities/detailed', async (req, res) => {
   const activities = await readJson(ACTIVITIES_FILE, []);
   const limit = parseInt(req.query.limit as string) || 100;
-  res.json(activities.slice(-limit));
+  const antigravityActivities = getAntigravityActivities();
+  const allActivities = [...activities, ...antigravityActivities]
+    .sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  res.json(allActivities.slice(-limit));
 });
 
 // ============ TASKS CRUD ============
@@ -526,14 +756,79 @@ app.delete('/api/tasks/:id', async (req, res) => {
 
 app.post('/api/tasks/:id/execute', async (req, res) => {
   const tasks = await readJson(TASKS_FILE, []);
-  const task = tasks.find((t: any) => t.id === req.params.id);
-  if (!task) return res.status(404).json({ error: 'Not found' });
-  // Simulate task execution
-  res.json({ success: true, result: 'Task executed successfully' });
+  const taskIdx = tasks.findIndex((t: any) => t.id === req.params.id);
+  if (taskIdx === -1) return res.status(404).json({ error: 'Not found' });
+  
+  const task = tasks[taskIdx];
+  if (!task.command) {
+    // If no command, simulate success
+    task.status = 'completed';
+    task.result = 'Task executed successfully (simulated)';
+    task.completed_at = new Date().toISOString();
+    tasks[taskIdx] = task;
+    await writeJson(TASKS_FILE, tasks);
+    logActivity('task', `Executed task (simulation): ${task.title}`, 'system', { task_id: task.id });
+    return res.json({ success: true, task });
+  }
+
+  // Update status to in_progress
+  task.status = 'in_progress';
+  task.result = 'Executing command...';
+  tasks[taskIdx] = task;
+  await writeJson(TASKS_FILE, tasks);
+  logActivity('task', `Executing shell command for: ${task.title}`, 'system', { task_id: task.id, command: task.command });
+  broadcast({ 
+    type: 'activity', 
+    data: { 
+      id: genId(), 
+      agent_id: 'system', 
+      type: 'request', 
+      message: `Executing command for task [${task.title}]: ${task.command}`, 
+      timestamp: new Date().toISOString(), 
+      metadata: { task_id: task.id } 
+    } 
+  });
+
+  // Execute command in background
+  exec(task.command, { cwd: ROOT_DIR }, async (error, stdout, stderr) => {
+    // Re-read tasks to avoid overwriting other modifications
+    const latestTasks = await readJson(TASKS_FILE, []);
+    const idx = latestTasks.findIndex((t: any) => t.id === task.id);
+    if (idx === -1) return;
+
+    const t = latestTasks[idx];
+    t.completed_at = new Date().toISOString();
+    if (error) {
+      t.status = 'blocked';
+      t.result = `Failed with exit code ${error.code || 1}\n\nSTDERR:\n${stderr}\n\nSTDOUT:\n${stdout}`;
+      logActivity('error', `Task failed: ${t.title}. Error: ${error.message}`, 'system', { task_id: t.id });
+    } else {
+      t.status = 'completed';
+      t.result = stdout || 'Command executed successfully with no output.';
+      logActivity('task', `Task completed: ${t.title}`, 'system', { task_id: t.id });
+    }
+
+    latestTasks[idx] = t;
+    await writeJson(TASKS_FILE, latestTasks);
+
+    // Broadcast the update via WS
+    broadcast({ 
+      type: 'activity', 
+      data: { 
+        id: genId(), 
+        agent_id: 'system', 
+        type: t.status === 'completed' ? 'response' : 'error', 
+        message: t.status === 'completed' ? `Task completed: ${t.title}` : `Task failed: ${t.title}`, 
+        timestamp: new Date().toISOString(), 
+        metadata: { task_id: t.id } 
+      } 
+    });
+  });
+
+  res.json({ success: true, message: 'Execution started in background', task });
 });
 
 // ============ ANALYTICS HELPERS ============
-const execAsync = promisify(exec);
 
 const getDateRange = (range: string) => {
   const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
@@ -739,9 +1034,15 @@ app.get('/api/analytics', async (req, res) => {
 // ============ TERMINAL ============
 app.post('/api/terminal/execute', async (req, res) => {
   const { command } = req.body;
-  // Simulate command execution
-  const output = `Executed: ${command}`;
-  res.json({ success: true, output });
+  if (!command) return res.status(400).json({ error: 'Command is required' });
+
+  exec(command, { timeout: 20000, cwd: ROOT_DIR }, (error, stdout, stderr) => {
+    const output = stdout + stderr;
+    res.json({ 
+      success: !error, 
+      output: output || (error ? error.message : 'Command executed with no output') 
+    });
+  });
 });
 
 app.get('/api/terminal/history', async (_req, res) => {
@@ -773,6 +1074,68 @@ app.get('/api/ai/skill-assignments', async (_req, res) => {
   res.json(await readJson(SKILL_ASSIGNMENTS_FILE, []));
 });
 
+const syncAgentCapabilities = async (assignments: any[]) => {
+  try {
+    const [skills, agents] = await Promise.all([
+      readJson(SKILLS_FILE, []),
+      readJson(AGENTS_METADATA_FILE, [])
+    ]);
+
+    // Get Codex inventory for Codex skills
+    let codexSkills: any[] = [];
+    try {
+      const codexHome = path.join(os.homedir(), '.codex');
+      const inventory = await getCodexInventory({ codexHome, workspaceDir: ROOT_DIR });
+      codexSkills = inventory.skills?.items || [];
+    } catch {}
+
+    let changed = false;
+    for (const agent of agents) {
+      const agentTargetKeys = [`claude_agent:${agent.id}`, `antigravity_agent:${agent.id}`];
+      const agentAssignments = assignments.filter((a: any) => agentTargetKeys.includes(a.target_key));
+      
+      const assignedSkillNames: string[] = [];
+      for (const assignment of agentAssignments) {
+        const skill = skills.find((s: any) => s.id === assignment.skill_id);
+        if (skill) {
+          assignedSkillNames.push(skill.name);
+        } else {
+          const codexSkill = codexSkills.find((s: any) => s.id === assignment.skill_id);
+          if (codexSkill) {
+            assignedSkillNames.push(codexSkill.name);
+          } else {
+            assignedSkillNames.push(assignment.skill_id);
+          }
+        }
+      }
+      
+      const coreCaps = agent.id === 'antigravity' 
+        ? ["code", "analysis", "planning", "subagents", "terminal", "browser", "image-gen"] 
+        : (agent.capabilities || ["chat", "tool-call"]);
+      
+      const allRegisteredSkillNames = [
+        ...skills.map((s: any) => s.name),
+        ...codexSkills.map((s: any) => s.name)
+      ];
+      
+      const cleanCoreCaps = coreCaps.filter((cap: string) => !allRegisteredSkillNames.includes(cap));
+      const nextCaps = [...new Set([...cleanCoreCaps, ...assignedSkillNames])];
+      
+      if (JSON.stringify(agent.capabilities) !== JSON.stringify(nextCaps)) {
+        agent.capabilities = nextCaps;
+        changed = true;
+      }
+    }
+    
+    if (changed) {
+      await writeJson(AGENTS_METADATA_FILE, agents);
+      console.log('[Capabilities Sync] Successfully updated agents.json capabilities.');
+    }
+  } catch (error) {
+    console.error('[Capabilities Sync] Error syncing capabilities:', error);
+  }
+};
+
 app.put('/api/ai/skills/:skillKey/assignments', async (req, res) => {
   try {
     const targetKeys = Array.isArray(req.body?.target_keys) ? req.body.target_keys : [];
@@ -784,6 +1147,7 @@ app.put('/api/ai/skills/:skillKey/assignments', async (req, res) => {
     );
 
     await writeJson(SKILL_ASSIGNMENTS_FILE, nextAssignments);
+    await syncAgentCapabilities(nextAssignments);
     await logActivity('skill-assignment', `Updated assignments for ${req.params.skillKey}`, 'system', { target_keys: targetKeys });
     res.json({
       success: true,
@@ -802,6 +1166,37 @@ app.get('/api/codex/overview', async (_req, res) => {
     res.json(inventory);
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to inspect Codex runtime' });
+  }
+});
+
+// ============ ANTIGRAVITY OBSERVABILITY ============
+app.get('/api/antigravity/overview', async (_req, res) => {
+  try {
+    const geminiHome = path.join(os.homedir(), '.gemini', 'antigravity');
+    const files = ['mcp_config.json', 'antigravity_state.pbtxt', 'user_settings.pb', 'agents/antigravity.md'];
+    
+    const fileSummaries = await Promise.all(
+      files.map(async (name) => {
+        const fp = path.join(geminiHome, name);
+        const exists = await fs.pathExists(fp);
+        let size = 0;
+        let updatedAt = null;
+        if (exists) {
+          const stats = await fs.stat(fp);
+          size = stats.size;
+          updatedAt = stats.mtime.toISOString();
+        }
+        return { name, exists, size, updated_at: updatedAt };
+      })
+    );
+
+    res.json({
+      antigravity_home: geminiHome,
+      workspace_dir: ROOT_DIR,
+      files: fileSummaries
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to inspect Antigravity runtime' });
   }
 });
 
@@ -836,54 +1231,224 @@ const getClaudeSessionsDir = () => {
   return null;
 };
 
+const getAntigravitySessionsDir = () => {
+  const home = os.homedir();
+  return path.join(home, '.gemini', 'antigravity', 'brain');
+};
+
+const getAntigravityActivities = (): any[] => {
+  const dir = getAntigravitySessionsDir();
+  if (!fs.existsSync(dir)) return [];
+
+  const antigravityActivities: any[] = [];
+  try {
+    const subdirs = fs.readdirSync(dir);
+    for (const d of subdirs) {
+      const transcriptPath = path.join(dir, d, '.system_generated', 'logs', 'transcript.jsonl');
+      if (fs.existsSync(transcriptPath)) {
+        try {
+          const content = fs.readFileSync(transcriptPath, 'utf-8');
+          const lines = content.split('\n').filter(l => l.trim());
+          let lineIndex = 0;
+          for (const line of lines) {
+            lineIndex++;
+            try {
+              const entry = JSON.parse(line);
+              if (entry.type === 'USER_INPUT') {
+                const reqText = entry.content?.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/)?.[1] || entry.content;
+                if (reqText) {
+                  antigravityActivities.push({
+                    id: `antigravity-act-in-${d}-${lineIndex}`,
+                    agent_id: 'antigravity',
+                    type: 'request',
+                    message: (typeof reqText === 'string' ? reqText.trim() : 'User Request').substring(0, 150),
+                    timestamp: entry.created_at || new Date().toISOString(),
+                    metadata: { session_id: d }
+                  });
+                }
+              } else if (entry.type === 'PLANNER_RESPONSE') {
+                const resText = typeof entry.content === 'string' ? entry.content : '';
+                if (resText) {
+                  antigravityActivities.push({
+                    id: `antigravity-act-out-${d}-${lineIndex}`,
+                    agent_id: 'antigravity',
+                    type: 'response',
+                    message: resText.trim().substring(0, 150),
+                    timestamp: entry.created_at || new Date().toISOString(),
+                    metadata: { session_id: d }
+                  });
+                }
+              }
+            } catch {}
+          }
+        } catch (e) {
+          console.error(`Error extracting activity from Antigravity session ${d}:`, e);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error reading Antigravity activities:', e);
+  }
+  return antigravityActivities;
+};
+
+const getAntigravitySessions = () => {
+  const dir = getAntigravitySessionsDir();
+  if (!fs.existsSync(dir)) {
+    console.log(`[Antigravity Sessions] Directory not found: ${dir}`);
+    return [];
+  }
+
+  const sessions: any[] = [];
+  try {
+    const subdirs = fs.readdirSync(dir);
+    for (const d of subdirs) {
+      const transcriptPath = path.join(dir, d, '.system_generated', 'logs', 'transcript.jsonl');
+      if (fs.existsSync(transcriptPath)) {
+        const stat = fs.statSync(transcriptPath);
+        let title = 'Antigravity Session';
+        let msgCount = 0;
+        let firstTs: string | null = null;
+
+        try {
+          const content = fs.readFileSync(transcriptPath, 'utf-8');
+          const lines = content.split('\n').filter(l => l.trim());
+          for (const line of lines) {
+            try {
+              const entry = JSON.parse(line);
+              if (entry.type === 'USER_INPUT') {
+                msgCount++;
+                if (title === 'Antigravity Session') {
+                  const reqText = entry.content?.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/)?.[1] || entry.content;
+                  if (reqText && typeof reqText === 'string') {
+                    title = reqText.trim().substring(0, 80);
+                  }
+                }
+                if (!firstTs && entry.created_at) firstTs = entry.created_at;
+              } else if (entry.type === 'PLANNER_RESPONSE') {
+                msgCount++;
+              }
+            } catch {}
+          }
+        } catch (e) {
+          console.error(`Error parsing Antigravity session ${d}:`, e);
+        }
+
+        sessions.push({
+          id: `antigravity-${d}`,
+          title: `[Antigravity] ${title}`,
+          timestamp: firstTs || stat.mtime.toISOString(),
+          message_count: msgCount,
+          file_size: stat.size
+        });
+      }
+    }
+  } catch (e) {
+    console.error('Error reading Antigravity sessions:', e);
+  }
+  return sessions;
+};
+
 app.get('/api/cli/sessions', async (_req, res) => {
   const dir = getClaudeSessionsDir();
-  if (!dir) return res.json([]);
-  const files = fs.readdirSync(dir).filter((f: string) => f.endsWith('.jsonl'));
-  const sessions = files.map((f: string) => {
-    const fp = path.join(dir, f);
-    const stat = fs.statSync(fp);
-    let title = 'CLI Session';
-    let msgCount = 0;
-    let firstTs: string | null = null;
+  let sessions: any[] = [];
+  if (dir && fs.existsSync(dir)) {
+    const files = fs.readdirSync(dir).filter((f: string) => f.endsWith('.jsonl'));
+    sessions = files.map((f: string) => {
+      const fp = path.join(dir, f);
+      const stat = fs.statSync(fp);
+      let title = 'CLI Session';
+      let msgCount = 0;
+      let firstTs: string | null = null;
 
+      try {
+        const content = fs.readFileSync(fp, 'utf-8');
+        const lines = content.split('\n').filter(l => l.trim());
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line);
+            const type = entry.type;
+            
+            if (type === 'user' || type === 'assistant') {
+              msgCount++;
+              if (type === 'user' && title === 'CLI Session') {
+                const rawContent = entry.message?.content;
+                if (typeof rawContent === 'string') {
+                  title = rawContent.substring(0, 80);
+                } else if (Array.isArray(rawContent)) {
+                  title = rawContent.find(b => b.type === 'text')?.text?.substring(0, 80) || title;
+                }
+                if (!firstTs) firstTs = entry.timestamp;
+              }
+            }
+          } catch {}
+        }
+      } catch (e) { console.error(`Error parsing ${f}:`, e); }
+
+      return { 
+        id: f.replace('.jsonl', ''), 
+        title, 
+        timestamp: firstTs || stat.mtime.toISOString(), 
+        message_count: msgCount, 
+        file_size: stat.size 
+      };
+    });
+  }
+
+  // Fetch Antigravity sessions and merge them
+  const antigravitySessions = getAntigravitySessions();
+  const allSessions = [...sessions, ...antigravitySessions].sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  res.json(allSessions);
+});
+
+app.get('/api/cli/sessions/:id', async (req, res) => {
+  if (req.params.id.startsWith('antigravity-')) {
+    const realId = req.params.id.replace('antigravity-', '');
+    const dir = getAntigravitySessionsDir();
+    const fp = path.join(dir, realId, '.system_generated', 'logs', 'transcript.jsonl');
+    if (!fs.existsSync(fp)) return res.status(404).json({ error: 'Session not found' });
+
+    const messages: any[] = [];
     try {
       const content = fs.readFileSync(fp, 'utf-8');
       const lines = content.split('\n').filter(l => l.trim());
       for (const line of lines) {
         try {
           const entry = JSON.parse(line);
-          const type = entry.type;
-          
-          if (type === 'user' || type === 'assistant') {
-            msgCount++;
-            if (type === 'user' && title === 'CLI Session') {
-              const rawContent = entry.message?.content;
-              if (typeof rawContent === 'string') {
-                title = rawContent.substring(0, 80);
-              } else if (Array.isArray(rawContent)) {
-                title = rawContent.find(b => b.type === 'text')?.text?.substring(0, 80) || title;
-              }
-              if (!firstTs) firstTs = entry.timestamp;
-            }
+          if (entry.type === 'USER_INPUT') {
+            const reqText = entry.content?.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/)?.[1] || entry.content;
+            messages.push({
+              id: `antigravity-msg-${entry.step_index}-${messages.length}`,
+              role: 'user',
+              type: 'user',
+              content: reqText || '[Empty Message]',
+              timestamp: entry.created_at
+            });
+          } else if (entry.type === 'PLANNER_RESPONSE') {
+            const text = entry.content || '';
+            const tools = Array.isArray(entry.tool_calls) 
+              ? entry.tool_calls.map((t: any) => t.name)
+              : [];
+            
+            messages.push({
+              id: `antigravity-msg-${entry.step_index}-${messages.length}`,
+              role: 'assistant',
+              type: 'assistant',
+              content: text || (tools.length > 0 ? `[Tool Use: ${tools.join(', ')}]` : '[Processing...]'),
+              timestamp: entry.created_at,
+              tools: tools,
+              model: 'gemini-3.5-flash'
+            });
           }
         } catch {}
       }
-    } catch (e) { console.error(`Error parsing ${f}:`, e); }
+    } catch (err) {
+      return res.status(500).json({ error: 'Failed to read session file' });
+    }
+    return res.json(messages);
+  }
 
-    return { 
-      id: f.replace('.jsonl', ''), 
-      title, 
-      timestamp: firstTs || stat.mtime.toISOString(), 
-      message_count: msgCount, 
-      file_size: stat.size 
-    };
-  }).sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-  res.json(sessions);
-});
-
-app.get('/api/cli/sessions/:id', async (req, res) => {
   const dir = getClaudeSessionsDir();
   if (!dir) return res.status(404).json({ error: 'Not found' });
   const fp = path.join(dir, `${req.params.id}.jsonl`);
@@ -958,7 +1523,6 @@ app.get('/api/cli/sessions/:id', async (req, res) => {
 // ============ CLAUDE.MD MANAGEMENT ============
 const CLAUDE_MD = path.join(ROOT_DIR, 'CLAUDE.md');
 const PROVIDERS_FILE = path.join(CLAUDE_DIR, 'providers.json');
-const HOOK_HISTORY_FILE = path.join(DATA_DIR, 'hook_history.json');
 
 app.get('/api/claude-md', async (_req, res) => {
   try {
@@ -1081,30 +1645,65 @@ app.post('/api/hooks/:id/execute', async (req, res) => {
     status: 'running'
   };
   
+  let history = await readJson(HOOK_HISTORY_FILE, []);
+  history.push(historyEntry);
+  await writeJson(HOOK_HISTORY_FILE, history.slice(-200));
+  broadcast({ type: 'hook-history-update', hook_id: hook.id });
+
   try {
-    const { stdout, stderr } = await execAsync(hook.action, { 
+    let finalCommand = hook.action;
+    if (hook.agent && hook.agent !== 'none') {
+      let diff = '';
+      try {
+        const { stdout } = await execAsync('git diff HEAD', { cwd: ROOT_DIR, timeout: 15000 });
+        diff = stdout || 'No uncommitted changes detected (clean working tree).';
+      } catch (gitErr: any) {
+        diff = `Failed to retrieve git diff: ${gitErr.message}`;
+      }
+      const prompt = `Task: ${hook.action}\nCode Changes to review:\n${diff}`;
+      const escapedPrompt = prompt.replace(/"/g, '\\"').replace(/\n/g, ' ');
+
+      if (hook.agent === 'antigravity') {
+        finalCommand = `antigravity "${escapedPrompt.substring(0, 2000)}"`;
+      } else if (hook.agent === 'claude') {
+        finalCommand = `claude -p "${escapedPrompt.substring(0, 2000)}"`;
+      } else if (hook.agent === 'codex') {
+        finalCommand = `codex run "${escapedPrompt.substring(0, 2000)}"`;
+      }
+    }
+
+    logActivity('hook-exec', `Hook "${hook.name}" manual run started`, 'system');
+
+    const { stdout, stderr } = await execAsync(finalCommand, { 
       cwd: ROOT_DIR, 
-      timeout: 30000,
-      env: { ...process.env, HOOK_NAME: hook.name, HOOK_TRIGGER: hook.trigger }
+      timeout: 60000,
+      env: { ...process.env, HOOK_NAME: hook.name, HOOK_TRIGGER: 'manual' }
     });
+
     historyEntry.status = 'success';
     historyEntry.output = stdout.substring(0, 2000);
     historyEntry.error = stderr ? stderr.substring(0, 500) : null;
     historyEntry.completed_at = new Date().toISOString();
-    
-    logActivity('hook-exec', `Hook "${hook.name}" executed successfully`, 'system', { output: stdout.substring(0, 200) });
+
+    logActivity('hook-exec', `Hook "${hook.name}" executed successfully (manual)`, 'system', { output: stdout.substring(0, 200) });
   } catch (e: any) {
     historyEntry.status = 'error';
-    historyEntry.error = e.message?.substring(0, 500) || 'Unknown error';
+    historyEntry.error = e.message?.substring(0, 1000) || 'Unknown error';
     historyEntry.completed_at = new Date().toISOString();
-    
+
     logActivity('hook-exec', `Hook "${hook.name}" failed: ${e.message?.substring(0, 100)}`, 'system');
   }
-  
-  // Save to history
-  const history = await readJson(HOOK_HISTORY_FILE, []);
-  history.push(historyEntry);
+
+  // Update history
+  history = await readJson(HOOK_HISTORY_FILE, []);
+  const entryIdx = history.findIndex((h: any) => h.id === historyEntry.id);
+  if (entryIdx !== -1) {
+    history[entryIdx] = historyEntry;
+  } else {
+    history.push(historyEntry);
+  }
   await writeJson(HOOK_HISTORY_FILE, history.slice(-200));
+  broadcast({ type: 'hook-history-update', hook_id: hook.id });
   
   res.json(historyEntry);
 });

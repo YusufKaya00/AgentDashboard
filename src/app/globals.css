@@ -1,20 +1,20 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #d97757;
-  --color-primary-light: #e58a6d;
-  --color-accent: #00c853;
-  --color-accent-light: #00e676;
-  --color-background: #0a0a0c;
-  --color-background-alt: #111114;
-  --color-surface: rgba(255, 255, 255, 0.04);
-  --color-foreground: #ffffff;
-  --color-muted: #8e8e93;
-  --color-error: #ff4b4b;
-  --color-warning: #f59e0b;
+  --color-primary: #8b5cf6;
+  --color-primary-light: #a78bfa;
+  --color-accent: #06b6d4;
+  --color-accent-light: #22d3ee;
+  --color-background: #08080a;
+  --color-background-alt: #0f0f13;
+  --color-surface: rgba(255, 255, 255, 0.035);
+  --color-foreground: #fafafa;
+  --color-muted: #a1a1aa;
+  --color-error: #f43f5e;
+  --color-warning: #fbbf24;
   --color-info: #3b82f6;
-  --color-secondary: #a78bfa;
-  --color-border: rgba(255, 255, 255, 0.08);
+  --color-secondary: #ec4899;
+  --color-border: rgba(255, 255, 255, 0.07);
 
   --radius-xl: 20px;
   --radius-lg: 14px;
@@ -22,17 +22,17 @@
 }
 
 :root {
-  --primary: #d97757;
-  --accent: #00c853;
-  --background: #0a0a0c;
-  --background-alt: #111114;
-  --foreground: #ffffff;
-  --foreground-muted: #8e8e93;
-  --muted: #8e8e93;
-  --surface: rgba(255, 255, 255, 0.04);
-  --border: rgba(255, 255, 255, 0.08);
-  --error: #ff4b4b;
-  --warning: #f59e0b;
+  --primary: #8b5cf6;
+  --accent: #06b6d4;
+  --background: #08080a;
+  --background-alt: #0f0f13;
+  --foreground: #fafafa;
+  --foreground-muted: #a1a1aa;
+  --muted: #a1a1aa;
+  --surface: rgba(255, 255, 255, 0.035);
+  --border: rgba(255, 255, 255, 0.07);
+  --error: #f43f5e;
+  --warning: #fbbf24;
   --info: #3b82f6;
 }
 
@@ -131,11 +131,11 @@
 
   /* Navigation */
   .nav-button {
-    @apply w-full flex items-center gap-3 px-4 py-3 rounded-lg text-muted font-medium transition-all hover:bg-white/5 hover:text-white;
+    @apply w-full flex items-center gap-3 px-3 py-2 rounded-xl text-muted/70 font-semibold transition-all duration-250 hover:bg-white/[0.04] hover:text-white relative;
   }
 
   .nav-button.active {
-    @apply bg-primary/10 text-primary font-bold shadow-[inset_0_0_20px_rgba(217,119,87,0.05)];
+    @apply bg-primary/10 text-primary font-bold shadow-[0_0_25px_rgba(139,92,246,0.1)] border-l-2 border-primary rounded-l-none pl-2.5;
   }
 
   /* Switch */

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { api } from '@/lib/api';
 
 export default function CLAUDEEditor() {
   const [content, setContent] = useState('');
@@ -14,8 +15,7 @@ export default function CLAUDEEditor() {
 
   const loadContent = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/claude-md');
-      const data = await res.json();
+      const data = await api.getClaudeMd();
       setContent(data.content);
     } catch (e) { console.error('Failed to load CLAUDE.md:', e); }
     finally { setLoading(false); }
@@ -24,11 +24,7 @@ export default function CLAUDEEditor() {
   const saveContent = async () => {
     setSaving(true);
     try {
-      await fetch('http://localhost:8000/api/claude-md', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content })
-      });
+      await api.updateClaudeMd(content);
       setSaved(true);
       setLastSaved(new Date().toLocaleTimeString());
       setTimeout(() => setSaved(false), 2000);
@@ -39,8 +35,7 @@ export default function CLAUDEEditor() {
   const syncSkills = async () => {
     setSyncing(true);
     try {
-      const res = await fetch('http://localhost:8000/api/skills/sync-all', { method: 'POST' });
-      const data = await res.json();
+      const data = await api.syncAllSkills();
       alert(`✅ ${data.synced} skill synced to CLAUDE.md`);
       loadContent();
     } catch (e) { console.error('Sync failed:', e); }

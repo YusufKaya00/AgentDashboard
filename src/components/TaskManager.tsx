@@ -12,8 +12,11 @@ interface Task {
   assigned_to: string;
   dependencies: string[];
   estimated_hours: number;
+  command?: string;
+  result?: string;
   created_at: string;
   updated_at: string;
+  completed_at?: string;
 }
 
 interface TaskStats {
@@ -39,6 +42,8 @@ export default function TaskManager() {
   const [filter, setFilter] = useState<'all' | 'pending' | 'in_progress' | 'completed' | 'blocked'>('all');
   const [priorityFilter, setPriorityFilter] = useState<'all' | 'P0' | 'P1' | 'P2' | 'P3'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [expandedTasks, setExpandedTasks] = useState<string[]>([]);
+  const [executingTaskId, setExecutingTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     loadTasks();
@@ -99,6 +104,27 @@ export default function TaskManager() {
     } catch (error) {
       console.error('Error saving task:', error);
     }
+  };
+
+  const handleExecuteTask = async (taskId: string) => {
+    setExecutingTaskId(taskId);
+    try {
+      await api.executeTask(taskId);
+      // Auto expand to show output/progress
+      setExpandedTasks((prev) => prev.includes(taskId) ? prev : [...prev, taskId]);
+      loadTasks();
+      loadStats();
+    } catch (error) {
+      console.error('Error executing task:', error);
+    } finally {
+      setExecutingTaskId(null);
+    }
+  };
+
+  const toggleExpandTask = (taskId: string) => {
+    setExpandedTasks((prev) =>
+      prev.includes(taskId) ? prev.filter((id) => id !== taskId) : [...prev, taskId]
+    );
   };
 
   const handleStatusChange = async (taskId: string, status: Task['status']) => {
@@ -251,61 +277,127 @@ export default function TaskManager() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredTasks.map((task) => (
-            <div
-              key={task.id}
-              className="glass-card-sm p-4 hover:border-primary/30 transition-all group"
-            >
-              <div className="flex items-start gap-4">
-                {/* Priority Badge */}
-                <span className={`badge ${getPriorityColor(task.priority)} shrink-0`}>
-                  {task.priority}
-                </span>
+          {filteredTasks.map((task) => {
+            const isExpanded = expandedTasks.includes(task.id);
+            const isExecuting = executingTaskId === task.id || task.status === 'in_progress';
+            return (
+              <div
+                key={task.id}
+                className="glass-card-sm p-4 hover:border-primary/30 transition-all group"
+              >
+                <div className="flex items-start gap-4">
+                  {/* Priority Badge */}
+                  <span className={`badge ${getPriorityColor(task.priority)} shrink-0`}>
+                    {task.priority}
+                  </span>
 
-                {/* Task Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-sm font-semibold text-white truncate">{task.title}</h3>
-                    <span className={`badge ${getStatusColor(task.status)} shrink-0`}>
-                      {task.status.replace('_', ' ')}
-                    </span>
+                  {/* Task Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-1.5 flex-wrap">
+                      <h3 className="text-sm font-semibold text-white truncate">{task.title}</h3>
+                      <span className={`badge ${getStatusColor(task.status)} shrink-0`}>
+                        {task.status.replace('_', ' ')}
+                      </span>
+                      {task.command && (
+                        <span className="flex items-center gap-1 text-[9px] font-mono text-primary bg-primary/5 px-2 py-0.5 rounded border border-primary/20">
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          {task.command}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted mb-3 line-clamp-2">{task.description}</p>
+                    <div className="flex flex-wrap items-center gap-4 text-[10px] text-muted font-bold uppercase tracking-wider">
+                      <span>👤 {task.assigned_to}</span>
+                      <span>⏱️ {task.estimated_hours}h</span>
+                      <span>📅 {new Date(task.created_at).toLocaleDateString()}</span>
+                      {task.command && (
+                        <button
+                          onClick={() => toggleExpandTask(task.id)}
+                          className="text-[10px] text-primary hover:text-accent font-bold uppercase tracking-widest flex items-center gap-1 transition-colors"
+                        >
+                          {isExpanded ? 'Hide Logs ▴' : 'Show Logs ▾'}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-xs text-muted mb-3 line-clamp-2">{task.description}</p>
-                  <div className="flex items-center gap-4 text-[10px] text-muted font-bold uppercase tracking-wider">
-                    <span>👤 {task.assigned_to}</span>
-                    <span>⏱️ {task.estimated_hours}h</span>
-                    <span>📅 {new Date(task.created_at).toLocaleDateString()}</span>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {task.command && (
+                      <button
+                        onClick={() => handleExecuteTask(task.id)}
+                        disabled={isExecuting}
+                        className={`btn btn-sm ${
+                          task.status === 'completed'
+                            ? 'btn-secondary text-accent hover:bg-accent/10 border-accent/20'
+                            : 'btn-primary'
+                        } flex items-center gap-1 py-1 px-3`}
+                      >
+                        {isExecuting ? (
+                          <>
+                            <span className="w-3 h-3 border-2 border-t-transparent border-white rounded-full animate-spin" />
+                            <span>Running</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M8 5v14l11-7z" />
+                            </svg>
+                            <span>{task.status === 'completed' ? 'Rerun' : 'Run'}</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                    <select
+                      value={task.status}
+                      onChange={(e) => handleStatusChange(task.id, e.target.value as Task['status'])}
+                      className="select w-auto text-xs py-1"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="completed">Completed</option>
+                      <option value="blocked">Blocked</option>
+                    </select>
+                    <button
+                      onClick={() => handleEdit(task)}
+                      className="btn btn-ghost btn-sm"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(task.id)}
+                      className="btn btn-ghost btn-sm text-red-500 hover:text-red-400"
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <select
-                    value={task.status}
-                    onChange={(e) => handleStatusChange(task.id, e.target.value as Task['status'])}
-                    className="select w-auto text-xs"
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                    <option value="blocked">Blocked</option>
-                  </select>
-                  <button
-                    onClick={() => handleEdit(task)}
-                    className="btn btn-ghost btn-sm"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(task.id)}
-                    className="btn btn-ghost btn-sm text-red-500 hover:text-red-400"
-                  >
-                    Delete
-                  </button>
-                </div>
+                {/* Collapsible logs console */}
+                {isExpanded && task.command && (
+                  <div className="mt-4 p-4 bg-zinc-950/90 border border-white/5 rounded-xl font-mono text-xs leading-relaxed max-h-[300px] overflow-y-auto custom-scrollbar select-text">
+                    <div className="flex items-center justify-between text-[9px] text-zinc-500 font-bold uppercase tracking-wider mb-2.5 border-b border-white/5 pb-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                        <span>Execution Console</span>
+                      </div>
+                      {task.completed_at && (
+                        <span>Finished at {new Date(task.completed_at).toLocaleTimeString()}</span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-zinc-500 font-mono mb-2">
+                      $ {task.command}
+                    </div>
+                    <pre className="whitespace-pre-wrap text-zinc-300">
+                      {task.result || 'No logs output. Execute task to trigger logs stream.'}
+                    </pre>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -379,6 +471,17 @@ function TaskModal({ task, onSave, onClose }: TaskModalProps) {
               rows={4}
               placeholder="Task description"
               required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-zinc-500 uppercase tracking-wider mb-2">Shell Command (Optional)</label>
+            <input
+              type="text"
+              value={formData.command || ''}
+              onChange={(e) => setFormData({ ...formData, command: e.target.value })}
+              className="input font-mono text-xs"
+              placeholder="e.g. npm run test, git status, echo 'Starting...'"
             />
           </div>
 

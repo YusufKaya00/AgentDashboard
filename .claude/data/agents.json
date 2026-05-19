@@ -144,12 +144,32 @@
     "capabilities": [
       "code",
       "analysis",
-      "update-config",
-      "review",
-      "speed up"
+      "brainstorming"
     ],
     "created_at": "2026-05-05T09:46:16.273Z",
     "updated_at": "2026-05-05T09:48:30.344Z",
+    "config": {}
+  },
+  {
+    "id": "antigravity",
+    "name": "Antigravity",
+    "description": "Advanced agentic coding assistant by Google DeepMind",
+    "model": "gemini-3.5-flash",
+    "status": "active",
+    "role": "agent",
+    "capabilities": [
+      "code",
+      "analysis",
+      "planning",
+      "subagents",
+      "terminal",
+      "image-gen",
+      "browser",
+      "brainstorming",
+      "executing-plans"
+    ],
+    "created_at": "2026-05-19T20:53:00.000Z",
+    "updated_at": "2026-05-19T21:25:22.414Z",
     "config": {}
   }
 ]
