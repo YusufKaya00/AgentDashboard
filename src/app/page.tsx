@@ -20,7 +20,7 @@ import CLAUDEEditor from '@/components/CLAUDEEditor';
 import CodexControlPanel from '@/components/CodexControlPanel';
 import AntigravityControlPanel from '@/components/AntigravityControlPanel';
 
-type DashboardTab = 'dashboard' | 'agents' | 'antigravity' | 'skills' | 'claude-editor' | 'clisessions' | 'codex' | 'terminal' | 'tasks' | 'activity' | 'system' | 'hooks';
+type DashboardTab = 'dashboard' | 'agents' | 'antigravity' | 'skills' | 'claude-editor' | 'clisessions' | 'codex' | 'terminal' | 'tasks' | 'activity' | 'system' | 'hooks' | 'analytics' | 'providers' | 'models';
 
 export default function Home() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -262,6 +262,27 @@ export default function Home() {
         <div className="animate-fade-in space-y-6">
           <PageHeader title="System" subtitle="Hooks" accent="Automation" />
           <HookList hooks={hooks} onRefresh={refreshHooks} />
+        </div>
+      )}
+
+      {activeTab === 'analytics' && (
+        <div className="animate-fade-in space-y-6">
+          <PageHeader title="Intelligence" subtitle="Analytics" accent="Performance" />
+          <AnalyticsDashboard />
+        </div>
+      )}
+
+      {activeTab === 'providers' && (
+        <div className="animate-fade-in space-y-6">
+          <PageHeader title="AI" subtitle="Providers" accent="Connectivity" />
+          <AIProviderManager />
+        </div>
+      )}
+
+      {activeTab === 'models' && (
+        <div className="animate-fade-in space-y-6">
+          <PageHeader title="Model" subtitle="Inventory" accent="Neural Engines" />
+          <ModelList models={models} onRefresh={refreshModels} />
         </div>
       )}
     </DashboardLayout>

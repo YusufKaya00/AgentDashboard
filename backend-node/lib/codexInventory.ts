@@ -80,7 +80,7 @@ const parseFrontMatter = (content: string) => {
   const lines = content.slice(3, end).split(/\r?\n/);
   for (const line of lines) {
     const match = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-    if (match) {
+    if (match && match[1] !== undefined && match[2] !== undefined) {
       result[match[1]] = match[2].replace(/^['"]|['"]$/g, '').trim();
     }
   }
@@ -146,8 +146,11 @@ const parseTomlLikeConfig = async (filePath: string) => {
     if (!match) continue;
 
     const key = match[1];
-    const value = match[2].replace(/^['"]|['"]$/g, '');
-    redacted[key] = SECRET_KEY_PATTERN.test(key) ? '[redacted]' : value;
+    const val = match[2];
+    if (key !== undefined && val !== undefined) {
+      const value = val.replace(/^['"]|['"]$/g, '');
+      redacted[key] = SECRET_KEY_PATTERN.test(key) ? '[redacted]' : value;
+    }
   }
 
   return redacted;

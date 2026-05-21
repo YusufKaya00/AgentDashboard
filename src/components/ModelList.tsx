@@ -154,9 +154,16 @@ export default function ModelList({ models, onRefresh }: ModelListProps) {
                 <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center border border-white/5 group-hover:border-[var(--primary)] group-hover:bg-[var(--primary-glow)] transition-all">
                   <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
                 </div>
-                <span className={`badge ${getProviderColor(model.provider)}`}>
-                  {model.provider}
-                </span>
+                <div className="flex flex-col items-end gap-1.5">
+                  <span className={`badge ${getProviderColor(model.provider)}`}>
+                    {model.provider}
+                  </span>
+                  {model.source && model.source !== 'custom' && (
+                    <span className="badge text-accent border-accent/30 bg-accent/10 normal-case tracking-normal text-[9px] px-2 py-0.5">
+                      .{model.source} cache
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="flex-1">
@@ -182,25 +189,33 @@ export default function ModelList({ models, onRefresh }: ModelListProps) {
               </div>
 
               <div className="flex items-center gap-2 pt-6 border-t border-white/5 mt-6">
-                <button
-                  onClick={() => handleToggle(model)}
-                  className={`switch ${model.enabled ? 'active' : ''}`}
-                  title={model.enabled ? 'Deactivate' : 'Activate'}
-                />
-                <button
-                  onClick={() => handleEdit(model)}
-                  className="btn btn-secondary flex-1 py-1.5 text-xs"
-                >
-                  Configure
-                </button>
-                <button
-                  onClick={() => handleDelete(model.id)}
-                  className="btn btn-secondary p-2 hover:text-red-500"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
+                {(!model.source || model.source === 'custom') ? (
+                  <>
+                    <button
+                      onClick={() => handleToggle(model)}
+                      className={`switch ${model.enabled ? 'active' : ''}`}
+                      title={model.enabled ? 'Deactivate' : 'Activate'}
+                    />
+                    <button
+                      onClick={() => handleEdit(model)}
+                      className="btn btn-secondary flex-1 py-1.5 text-xs"
+                    >
+                      Configure
+                    </button>
+                    <button
+                      onClick={() => handleDelete(model.id)}
+                      className="btn btn-secondary p-2 hover:text-red-500"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-[10px] font-bold text-muted text-center w-full py-2 bg-white/[0.02] border border-white/[0.04] rounded-lg tracking-wider uppercase">
+                    Read-only System Model
+                  </span>
+                )}
               </div>
             </div>
           ))}

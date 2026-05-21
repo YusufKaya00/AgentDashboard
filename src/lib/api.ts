@@ -368,6 +368,10 @@ export const api = {
     const res = await fetch(`${API_BASE}/antigravity/overview`);
     return res.json();
   },
+  getAntigravitySubagents: async (): Promise<any[]> => {
+    const res = await fetch(`${API_BASE}/antigravity/subagents`);
+    return res.json();
+  },
 
   // General AI Control Plane
   getAIOverview: async (): Promise<AIControlPlaneOverview> => {

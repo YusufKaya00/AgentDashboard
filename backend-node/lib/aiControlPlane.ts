@@ -55,7 +55,7 @@ export interface UnifiedSkill {
   origin: 'claude' | 'codex';
   category: string;
   enabled: boolean;
-  file_path?: string;
+  file_path?: string | undefined;
   assigned_targets: SkillAssignment[];
 }
 
@@ -64,8 +64,8 @@ export interface AITarget {
   id: string;
   name: string;
   type: TargetType;
-  provider?: string;
-  status?: string;
+  provider?: string | undefined;
+  status?: string | undefined;
   metadata: Record<string, string | boolean | undefined>;
 }
 

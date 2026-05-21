@@ -30,13 +30,14 @@ export interface Hook {
 export interface AIModel {
   id: string;
   name: string;
-  provider: 'anthropic' | 'openai' | 'codex' | 'antigravity' | 'custom';
+  provider: 'anthropic' | 'openai' | 'codex' | 'antigravity' | 'custom' | 'google' | string;
   api_endpoint?: string;
   api_key?: string;
   model_id: string;
   capabilities: string[];
   enabled: boolean;
   config: Record<string, any>;
+  source?: 'claude' | 'codex' | 'antigravity' | 'custom';
 }
 
 export interface ActivityLog {

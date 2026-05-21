@@ -46,8 +46,12 @@ describe('ai control plane', () => {
       'claude:review',
       'codex-plugin:systematic-debugging',
     ]);
-    assert.equal(skills[0].assigned_targets.length, 1);
-    assert.equal(skills[1].origin, 'codex');
+    const skill0 = skills[0];
+    const skill1 = skills[1];
+    assert.ok(skill0);
+    assert.ok(skill1);
+    assert.equal(skill0.assigned_targets.length, 1);
+    assert.equal(skill1.origin, 'codex');
   });
 
   it('builds assignable targets across agents, Codex roles, models, and providers', () => {

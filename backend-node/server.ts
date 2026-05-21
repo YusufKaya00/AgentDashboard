@@ -113,6 +113,104 @@ const writeJson = async (filePath: string, data: any) => {
 
 const genId = () => Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
 
+const getMergedModels = async () => {
+  const customModels = await readJson(MODELS_FILE, []);
+  const customList = Array.isArray(customModels) ? customModels.map((m: any) => ({
+    ...m,
+    source: 'custom',
+    provider: m.provider || 'custom'
+  })) : [];
+
+  const claudeCacheFile = path.join(os.homedir(), '.claude', 'cache', 'gateway-models.json');
+  let claudeList: any[] = [];
+  try {
+    if (await fs.pathExists(claudeCacheFile)) {
+      const data = await fs.readJson(claudeCacheFile);
+      if (data && Array.isArray(data.models)) {
+        claudeList = data.models.map((m: any) => ({
+          id: `claude:${m.id}`,
+          name: m.display_name || m.id,
+          provider: 'anthropic',
+          model_id: m.id,
+          enabled: true,
+          source: 'claude',
+          capabilities: ['chat', 'tool-use', 'artifacts'],
+          config: {}
+        }));
+      }
+    }
+  } catch (err) {
+    console.error('[Models Cache] Error reading Claude models:', err);
+  }
+
+  const codexCacheFile = path.join(os.homedir(), '.codex', 'models_cache.json');
+  let codexList: any[] = [];
+  try {
+    if (await fs.pathExists(codexCacheFile)) {
+      const data = await fs.readJson(codexCacheFile);
+      if (data && Array.isArray(data.models)) {
+        codexList = data.models.map((m: any) => ({
+          id: `codex:${m.slug}`,
+          name: m.display_name || m.slug,
+          provider: 'codex',
+          model_id: m.slug,
+          enabled: true,
+          source: 'codex',
+          capabilities: ['code', 'chat', 'reasoning'],
+          config: {}
+        }));
+      }
+    }
+  } catch (err) {
+    console.error('[Models Cache] Error reading Codex models:', err);
+  }
+
+  const antigravitySystemModels = [
+    {
+      id: "antigravity:gemini-1.5-pro",
+      name: "Gemini 1.5 Pro",
+      provider: "google",
+      model_id: "gemini-1.5-pro",
+      enabled: true,
+      source: "antigravity",
+      capabilities: ["chat", "code", "vision", "tool-use"],
+      config: {}
+    },
+    {
+      id: "antigravity:gemini-1.5-flash",
+      name: "Gemini 1.5 Flash",
+      provider: "google",
+      model_id: "gemini-1.5-flash",
+      enabled: true,
+      source: "antigravity",
+      capabilities: ["chat", "code", "vision", "fast"],
+      config: {}
+    },
+    {
+      id: "antigravity:gemini-2.0-flash-exp",
+      name: "Gemini 2.0 Flash (Experimental)",
+      provider: "google",
+      model_id: "gemini-2.0-flash-exp",
+      enabled: true,
+      source: "antigravity",
+      capabilities: ["chat", "code", "vision", "fast", "reasoning"],
+      config: {}
+    },
+    {
+      id: "antigravity:gemini-1.0-pro",
+      name: "Gemini 1.0 Pro",
+      provider: "google",
+      model_id: "gemini-1.0-pro",
+      enabled: true,
+      source: "antigravity",
+      capabilities: ["chat", "code"],
+      config: {}
+    }
+  ];
+
+  return [...customList, ...claudeList, ...codexList, ...antigravitySystemModels];
+};
+
 const logActivity = async (type: string, message: string, agentId = 'system', metadata: any = {}) => {
   const activity = { id: genId(), type, message, agent_id: agentId, timestamp: new Date().toISOString(), metadata };
   const activities = await readJson(ACTIVITIES_FILE, []);
@@ -130,7 +228,7 @@ const getAIControlPlaneOverview = async () => {
   const [agents, claudeSkills, models, providers, assignments, codexInventory] = await Promise.all([
     readJson(AGENTS_METADATA_FILE, []),
     readJson(SKILLS_FILE, []),
-    readJson(MODELS_FILE, []),
+    getMergedModels(),
     readJson(PROVIDERS_FILE, []),
     readJson(SKILL_ASSIGNMENTS_FILE, []),
     getCodexInventory({ codexHome: path.join(os.homedir(), '.codex'), workspaceDir: ROOT_DIR }),
@@ -304,7 +402,7 @@ app.get('/api/system/status', async (_req, res) => {
   const skills = await readJson(SKILLS_FILE, []);
   const activities = await readJson(ACTIVITIES_FILE, []);
   
-  const cpuLoad = os.loadavg()[0];
+  const cpuLoad = os.loadavg()[0] ?? 0;
   const cpuPercent = cpuLoad > 0 ? Math.min(Math.round(cpuLoad * 100 / os.cpus().length), 100) : Math.floor(Math.random() * 8) + 5;
   const totalMem = os.totalmem();
   const freeMem = os.freemem();
@@ -552,7 +650,7 @@ app.get('/api/agents/:id/prompt', async (req, res) => {
 });
 
 // ============ MODELS CRUD ============
-app.get('/api/models', async (_req, res) => res.json(await readJson(MODELS_FILE, [])));
+app.get('/api/models', async (_req, res) => res.json(await getMergedModels()));
 app.post('/api/models', async (req, res) => {
   const models = await readJson(MODELS_FILE, []);
   const model = { id: genId(), ...req.body, active: true };
@@ -561,6 +659,9 @@ app.post('/api/models', async (req, res) => {
   res.json(model);
 });
 app.put('/api/models/:id', async (req, res) => {
+  if (req.params.id.startsWith('claude:') || req.params.id.startsWith('codex:') || req.params.id.startsWith('antigravity:')) {
+    return res.status(403).json({ error: 'System models are read-only' });
+  }
   const models = await readJson(MODELS_FILE, []);
   const idx = models.findIndex((m: any) => m.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
@@ -569,12 +670,18 @@ app.put('/api/models/:id', async (req, res) => {
   res.json(models[idx]);
 });
 app.delete('/api/models/:id', async (req, res) => {
+  if (req.params.id.startsWith('claude:') || req.params.id.startsWith('codex:') || req.params.id.startsWith('antigravity:')) {
+    return res.status(403).json({ error: 'System models are read-only' });
+  }
   let models = await readJson(MODELS_FILE, []);
   models = models.filter((m: any) => m.id !== req.params.id);
   await writeJson(MODELS_FILE, models);
   res.json({ success: true });
 });
 app.post('/api/models/:id/toggle', async (req, res) => {
+  if (req.params.id.startsWith('claude:') || req.params.id.startsWith('codex:') || req.params.id.startsWith('antigravity:')) {
+    return res.status(403).json({ error: 'System models are read-only' });
+  }
   const models = await readJson(MODELS_FILE, []);
   const m = models.find((m: any) => m.id === req.params.id);
   if (!m) return res.status(404).json({ error: 'Not found' });
@@ -860,8 +967,10 @@ const getGitStats = async (range: string) => {
     let linesDeleted = 0;
     const match = diffStats.match(/(\d+) insertion(?:s)?(?:, (\d+) deletion(?:s)?)?/);
     if (match) {
-      linesAdded = parseInt(match[1]) || 0;
-      linesDeleted = parseInt(match[2]) || 0;
+      const m1 = match[1];
+      const m2 = match[2];
+      if (m1 !== undefined) linesAdded = parseInt(m1) || 0;
+      if (m2 !== undefined) linesDeleted = parseInt(m2) || 0;
     }
 
     // Get commits by day for trends
@@ -917,7 +1026,7 @@ const getTaskStats = async (range: string) => {
     // Tasks by day for trends
     const tasksByDay: Record<string, number> = {};
     filteredTasks.forEach((t: any) => {
-      const date = new Date(t.created_at).toISOString().split('T')[0];
+      const date = new Date(t.created_at).toISOString().split('T')[0] ?? '';
       tasksByDay[date] = (tasksByDay[date] || 0) + 1;
     });
 
@@ -952,7 +1061,7 @@ const getActivityStats = async (range: string) => {
     // Activities by day for trends
     const errorsByDay: Record<string, number> = {};
     errorActivities.forEach((a: any) => {
-      const date = new Date(a.timestamp).toISOString().split('T')[0];
+      const date = new Date(a.timestamp).toISOString().split('T')[0] ?? '';
       errorsByDay[date] = (errorsByDay[date] || 0) + 1;
     });
 
@@ -990,7 +1099,7 @@ app.get('/api/analytics', async (req, res) => {
   for (let i = days - 1; i >= 0; i--) {
     const date = new Date();
     date.setDate(date.getDate() - i);
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = date.toISOString().split('T')[0] ?? '';
 
     trends.push({
       timestamp: date.toISOString(),
@@ -1014,7 +1123,7 @@ app.get('/api/analytics', async (req, res) => {
       deployment_frequency: 0, // Not available without deployment tracking
     },
     system: {
-      cpu_usage: Math.round(os.loadavg()[0] * 10),
+      cpu_usage: Math.round((os.loadavg()[0] ?? 0) * 10),
       memory_usage: Math.round(((os.totalmem() - os.freemem()) / os.totalmem()) * 100),
       uptime: uptimePercent,
       response_time: 0, // Would need request timing middleware
@@ -1074,6 +1183,106 @@ app.get('/api/ai/skill-assignments', async (_req, res) => {
   res.json(await readJson(SKILL_ASSIGNMENTS_FILE, []));
 });
 
+const syncAllSkillsToClaudeMd = async () => {
+  try {
+    const [skills, assignments] = await Promise.all([
+      readJson(SKILLS_FILE, []),
+      readJson(SKILL_ASSIGNMENTS_FILE, [])
+    ]);
+    const originalMd = await fs.readFile(CLAUDE_MD, 'utf-8').catch(() => '# CLAUDE.md\n');
+    let md = originalMd;
+    
+    // Remove old skills section if exists
+    const marker = '<!-- DASHBOARD_SKILLS_START -->';
+    const endMarker = '<!-- DASHBOARD_SKILLS_END -->';
+    const startIdx = md.indexOf(marker);
+    const endIdx = md.indexOf(endMarker);
+    if (startIdx !== -1 && endIdx !== -1) {
+      md = md.substring(0, startIdx) + md.substring(endIdx + endMarker.length);
+    }
+    
+    // Build skills section - Only include skills that are active AND (either have no assignments, or are assigned to at least one Claude agent)
+    const activeSkills = skills.filter((s: any) => {
+      if (s.active === false || s.enabled === false) return false;
+      
+      const skillKey = `claude:${s.id}`;
+      const skillAssignments = assignments.filter((a: any) => a.skill_key === skillKey);
+      
+      if (skillAssignments.length === 0) {
+        return s.category !== 'custom' || s.source === 'claude';
+      }
+      
+      return skillAssignments.some((a: any) => a.target_key.startsWith('claude_agent:'));
+    });
+
+    if (activeSkills.length > 0) {
+      let section = `\n${marker}\n## 🛠 Active Skills (Dashboard Synced)\n\n`;
+      for (const s of activeSkills) {
+        section += `### ${s.name}\n- **Category:** ${s.category || 'custom'}\n- **Description:** ${s.description || 'N/A'}\n\n`;
+      }
+      section += `${endMarker}\n`;
+      md = md.trimEnd() + '\n' + section;
+    } else {
+      md = md.trim();
+    }
+    
+    if (md.trim() !== originalMd.trim()) {
+      await fs.writeFile(CLAUDE_MD, md, 'utf-8');
+      console.log(`[CLAUDE.md Sync] Synced ${activeSkills.length} skills (file updated).`);
+    } else {
+      console.log(`[CLAUDE.md Sync] Synced ${activeSkills.length} skills (no changes, skipped write).`);
+    }
+  } catch (error) {
+    console.error('[CLAUDE.md Sync] Error:', error);
+  }
+};
+
+const syncCodexSkills = async (assignments: any[], skills: any[]) => {
+  try {
+    const codexSkillsDir = path.join(os.homedir(), '.codex', 'skills');
+    await fs.ensureDir(codexSkillsDir);
+
+    // Find all skills that are assigned to Codex targets
+    const codexAssignments = assignments.filter((a: any) => a.target_key.startsWith('codex_agent:'));
+    const codexAssignedSkillIds = new Set(codexAssignments.map((a: any) => a.skill_id));
+
+    // For each assigned skill, write/update SKILL.md
+    for (const skillId of codexAssignedSkillIds) {
+      const skill = skills.find((s: any) => s.id === skillId);
+      if (!skill) continue;
+
+      const skillDir = path.join(codexSkillsDir, skill.id);
+      await fs.ensureDir(skillDir);
+
+      const skillMdContent = `+++
+title = ${JSON.stringify(skill.name)}
+description = ${JSON.stringify(skill.description || '')}
+category = ${JSON.stringify(skill.category || 'custom')}
++++
+
+# ${skill.name}
+
+${skill.description || ''}
+`;
+      await fs.writeFile(path.join(skillDir, 'SKILL.md'), skillMdContent, 'utf-8');
+      console.log(`[Codex Skill Sync] Exported skill ${skill.name} to ${skillDir}`);
+    }
+
+    // Clean up DB skill folders that are no longer assigned to Codex
+    const allDbSkillIds = new Set(skills.map((s: any) => s.id));
+    const existingDirs = await fs.readdir(codexSkillsDir).catch(() => []);
+    for (const dirName of existingDirs) {
+      if (allDbSkillIds.has(dirName) && !codexAssignedSkillIds.has(dirName)) {
+        const dirToDelete = path.join(codexSkillsDir, dirName);
+        await fs.remove(dirToDelete);
+        console.log(`[Codex Skill Sync] Cleaned up unassigned skill directory: ${dirToDelete}`);
+      }
+    }
+  } catch (error) {
+    console.error('[Codex Skill Sync] Error exporting skills:', error);
+  }
+};
+
 const syncAgentCapabilities = async (assignments: any[]) => {
   try {
     const [skills, agents] = await Promise.all([
@@ -1125,12 +1334,55 @@ const syncAgentCapabilities = async (assignments: any[]) => {
         agent.capabilities = nextCaps;
         changed = true;
       }
+
+      // Sync skills to persona markdown file under ~/.gemini/antigravity/agents/*.md
+      try {
+        const agentMdPath = path.join(AGENTS_DIR, `${agent.id}.md`);
+        if (await fs.pathExists(agentMdPath)) {
+          let content = await fs.readFile(agentMdPath, 'utf-8');
+          const startMarker = '<!-- DASHBOARD_SKILLS_START -->';
+          const endMarker = '<!-- DASHBOARD_SKILLS_END -->';
+          const startIdx = content.indexOf(startMarker);
+          const endIdx = content.indexOf(endMarker);
+
+          let skillsBlock = `\n${startMarker}\n### Capabilities & Skills\n`;
+          if (assignedSkillNames.length > 0) {
+            for (const skillName of assignedSkillNames) {
+              const skillObj = skills.find((s: any) => s.name === skillName) || 
+                              codexSkills.find((s: any) => s.name === skillName);
+              const desc = skillObj ? (skillObj.description || 'N/A') : 'N/A';
+              const cat = skillObj ? (skillObj.category || 'custom') : 'custom';
+              skillsBlock += `- **${skillName}**: ${desc} (Category: ${cat})\n`;
+            }
+          } else {
+            skillsBlock += `No dashboard-assigned skills.\n`;
+          }
+          skillsBlock += `${endMarker}\n`;
+
+          if (startIdx !== -1 && endIdx !== -1) {
+            content = content.substring(0, startIdx) + skillsBlock + content.substring(endIdx + endMarker.length);
+          } else {
+            content = content.trimEnd() + '\n' + skillsBlock;
+          }
+          await fs.writeFile(agentMdPath, content, 'utf-8');
+          console.log(`[Persona Sync] Synced skills to ${agentMdPath}`);
+        }
+      } catch (err) {
+        console.error(`[Persona Sync] Failed to update persona for agent ${agent.id}:`, err);
+      }
     }
     
     if (changed) {
       await writeJson(AGENTS_METADATA_FILE, agents);
       console.log('[Capabilities Sync] Successfully updated agents.json capabilities.');
     }
+
+    // Export skills assigned to Codex targets
+    await syncCodexSkills(assignments, skills);
+
+    // Sync all skills to CLAUDE.md
+    await syncAllSkillsToClaudeMd();
+
   } catch (error) {
     console.error('[Capabilities Sync] Error syncing capabilities:', error);
   }
@@ -1231,123 +1483,228 @@ const getClaudeSessionsDir = () => {
   return null;
 };
 
-const getAntigravitySessionsDir = () => {
+const getAntigravitySessionsDirs = () => {
+  const home = os.homedir();
+  return [
+    path.join(home, '.gemini', 'antigravity', 'brain'),
+    path.join(home, '.gemini', 'antigravity-cli', 'brain')
+  ].filter(d => fs.existsSync(d));
+};
+
+const getAntigravitySessionsDir = (): string => {
+  const dirs = getAntigravitySessionsDirs();
+  const firstDir = dirs[0];
+  if (firstDir !== undefined) return firstDir;
   const home = os.homedir();
   return path.join(home, '.gemini', 'antigravity', 'brain');
 };
 
 const getAntigravityActivities = (): any[] => {
-  const dir = getAntigravitySessionsDir();
-  if (!fs.existsSync(dir)) return [];
-
+  const dirs = getAntigravitySessionsDirs();
   const antigravityActivities: any[] = [];
-  try {
-    const subdirs = fs.readdirSync(dir);
-    for (const d of subdirs) {
-      const transcriptPath = path.join(dir, d, '.system_generated', 'logs', 'transcript.jsonl');
-      if (fs.existsSync(transcriptPath)) {
-        try {
-          const content = fs.readFileSync(transcriptPath, 'utf-8');
-          const lines = content.split('\n').filter(l => l.trim());
-          let lineIndex = 0;
-          for (const line of lines) {
-            lineIndex++;
-            try {
-              const entry = JSON.parse(line);
-              if (entry.type === 'USER_INPUT') {
-                const reqText = entry.content?.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/)?.[1] || entry.content;
-                if (reqText) {
-                  antigravityActivities.push({
-                    id: `antigravity-act-in-${d}-${lineIndex}`,
-                    agent_id: 'antigravity',
-                    type: 'request',
-                    message: (typeof reqText === 'string' ? reqText.trim() : 'User Request').substring(0, 150),
-                    timestamp: entry.created_at || new Date().toISOString(),
-                    metadata: { session_id: d }
-                  });
+  
+  for (const dir of dirs) {
+    try {
+      const subdirs = fs.readdirSync(dir);
+      for (const d of subdirs) {
+        const transcriptPath = path.join(dir, d, '.system_generated', 'logs', 'transcript.jsonl');
+        if (fs.existsSync(transcriptPath)) {
+          try {
+            const content = fs.readFileSync(transcriptPath, 'utf-8');
+            const lines = content.split('\n').filter(l => l.trim());
+            let lineIndex = 0;
+            for (const line of lines) {
+              lineIndex++;
+              try {
+                const entry = JSON.parse(line);
+                if (entry.type === 'USER_INPUT') {
+                  const reqText = entry.content?.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/)?.[1] || entry.content;
+                  if (reqText) {
+                    antigravityActivities.push({
+                      id: `antigravity-act-in-${d}-${lineIndex}`,
+                      agent_id: 'antigravity',
+                      type: 'request',
+                      message: (typeof reqText === 'string' ? reqText.trim() : 'User Request').substring(0, 150),
+                      timestamp: entry.created_at || new Date().toISOString(),
+                      metadata: { session_id: d }
+                    });
+                  }
+                } else if (entry.type === 'PLANNER_RESPONSE') {
+                  const resText = typeof entry.content === 'string' ? entry.content : '';
+                  if (resText) {
+                    antigravityActivities.push({
+                      id: `antigravity-act-out-${d}-${lineIndex}`,
+                      agent_id: 'antigravity',
+                      type: 'response',
+                      message: resText.trim().substring(0, 150),
+                      timestamp: entry.created_at || new Date().toISOString(),
+                      metadata: { session_id: d }
+                    });
+                  }
                 }
-              } else if (entry.type === 'PLANNER_RESPONSE') {
-                const resText = typeof entry.content === 'string' ? entry.content : '';
-                if (resText) {
-                  antigravityActivities.push({
-                    id: `antigravity-act-out-${d}-${lineIndex}`,
-                    agent_id: 'antigravity',
-                    type: 'response',
-                    message: resText.trim().substring(0, 150),
-                    timestamp: entry.created_at || new Date().toISOString(),
-                    metadata: { session_id: d }
-                  });
-                }
-              }
-            } catch {}
+              } catch {}
+            }
+          } catch (e) {
+            console.error(`Error extracting activity from Antigravity session ${d}:`, e);
           }
-        } catch (e) {
-          console.error(`Error extracting activity from Antigravity session ${d}:`, e);
         }
       }
+    } catch (e) {
+      console.error('Error reading Antigravity activities:', e);
     }
-  } catch (e) {
-    console.error('Error reading Antigravity activities:', e);
   }
   return antigravityActivities;
 };
 
 const getAntigravitySessions = () => {
-  const dir = getAntigravitySessionsDir();
-  if (!fs.existsSync(dir)) {
-    console.log(`[Antigravity Sessions] Directory not found: ${dir}`);
-    return [];
-  }
-
+  const dirs = getAntigravitySessionsDirs();
   const sessions: any[] = [];
-  try {
-    const subdirs = fs.readdirSync(dir);
-    for (const d of subdirs) {
-      const transcriptPath = path.join(dir, d, '.system_generated', 'logs', 'transcript.jsonl');
-      if (fs.existsSync(transcriptPath)) {
-        const stat = fs.statSync(transcriptPath);
-        let title = 'Antigravity Session';
-        let msgCount = 0;
-        let firstTs: string | null = null;
+  
+  for (const dir of dirs) {
+    try {
+      const subdirs = fs.readdirSync(dir);
+      for (const d of subdirs) {
+        const transcriptPath = path.join(dir, d, '.system_generated', 'logs', 'transcript.jsonl');
+        if (fs.existsSync(transcriptPath)) {
+          const stat = fs.statSync(transcriptPath);
+          let title = 'Antigravity Session';
+          let msgCount = 0;
+          let firstTs: string | null = null;
 
-        try {
-          const content = fs.readFileSync(transcriptPath, 'utf-8');
-          const lines = content.split('\n').filter(l => l.trim());
-          for (const line of lines) {
-            try {
-              const entry = JSON.parse(line);
-              if (entry.type === 'USER_INPUT') {
-                msgCount++;
-                if (title === 'Antigravity Session') {
-                  const reqText = entry.content?.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/)?.[1] || entry.content;
-                  if (reqText && typeof reqText === 'string') {
-                    title = reqText.trim().substring(0, 80);
+          try {
+            const content = fs.readFileSync(transcriptPath, 'utf-8');
+            const lines = content.split('\n').filter(l => l.trim());
+            for (const line of lines) {
+              try {
+                const entry = JSON.parse(line);
+                if (entry.type === 'USER_INPUT') {
+                  msgCount++;
+                  if (title === 'Antigravity Session') {
+                    const reqText = entry.content?.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/)?.[1] || entry.content;
+                    if (reqText && typeof reqText === 'string') {
+                      title = reqText.trim().substring(0, 80);
+                    }
                   }
+                  if (!firstTs && entry.created_at) firstTs = entry.created_at;
+                } else if (entry.type === 'PLANNER_RESPONSE') {
+                  msgCount++;
                 }
-                if (!firstTs && entry.created_at) firstTs = entry.created_at;
-              } else if (entry.type === 'PLANNER_RESPONSE') {
-                msgCount++;
-              }
-            } catch {}
+              } catch {}
+            }
+          } catch (e) {
+            console.error(`Error parsing Antigravity session ${d}:`, e);
           }
-        } catch (e) {
-          console.error(`Error parsing Antigravity session ${d}:`, e);
-        }
 
-        sessions.push({
-          id: `antigravity-${d}`,
-          title: `[Antigravity] ${title}`,
-          timestamp: firstTs || stat.mtime.toISOString(),
-          message_count: msgCount,
-          file_size: stat.size
-        });
+          sessions.push({
+            id: `antigravity-${d}`,
+            title: `[Antigravity] ${title}`,
+            timestamp: firstTs || stat.mtime.toISOString(),
+            message_count: msgCount,
+            file_size: stat.size
+          });
+        }
       }
+    } catch (e) {
+      console.error('Error reading Antigravity sessions:', e);
     }
-  } catch (e) {
-    console.error('Error reading Antigravity sessions:', e);
   }
   return sessions;
 };
+
+const getAntigravitySubagents = async () => {
+  const subagents = [
+    {
+      id: 'research',
+      name: 'research',
+      role: 'Codebase Researcher',
+      description: 'Research subagent with read-only tools for exploring the codebase and searching the web.',
+      status: 'idle',
+      type: 'static'
+    },
+    {
+      id: 'self',
+      name: 'self',
+      role: 'Autonomous Clone',
+      description: 'Autonomous clone inheriting the parent agent\'s configuration and tools.',
+      status: 'idle',
+      type: 'static'
+    }
+  ];
+
+  const dirs = getAntigravitySessionsDirs();
+  const seenSubagents = new Map<string, any>();
+
+  for (const dir of dirs) {
+    try {
+      const subdirs = fs.readdirSync(dir);
+      for (const d of subdirs) {
+        const transcriptPath = path.join(dir, d, '.system_generated', 'logs', 'transcript.jsonl');
+        if (fs.existsSync(transcriptPath)) {
+          try {
+            const content = fs.readFileSync(transcriptPath, 'utf-8');
+            const lines = content.split('\n').filter(l => l.trim());
+            for (const line of lines) {
+              try {
+                const entry = JSON.parse(line);
+                if (entry.tool_calls) {
+                  for (const tc of entry.tool_calls) {
+                    if (tc.name === 'define_subagent' && tc.args) {
+                      const args = tc.args;
+                      if (args.name) {
+                        seenSubagents.set(args.name, {
+                          id: args.name,
+                          name: args.name,
+                          role: args.name,
+                          description: args.description || 'Custom defined subagent',
+                          status: 'idle',
+                          type: 'dynamic'
+                        });
+                      }
+                    }
+                    if (tc.name === 'invoke_subagent' && tc.args) {
+                      const subagentsArr = tc.args.Subagents || [];
+                      for (const sub of subagentsArr) {
+                        if (sub.TypeName) {
+                          const existing = seenSubagents.get(sub.TypeName);
+                          if (existing) {
+                            existing.status = 'active';
+                            existing.role = sub.Role || existing.role;
+                            existing.prompt = sub.Prompt || existing.prompt;
+                          } else {
+                            seenSubagents.set(sub.TypeName, {
+                              id: sub.TypeName,
+                              name: sub.TypeName,
+                              role: sub.Role || sub.TypeName,
+                              description: `Dynamic subagent invoked in session ${d}`,
+                              status: 'active',
+                              type: 'dynamic',
+                              prompt: sub.Prompt
+                            });
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              } catch {}
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+  }
+
+  return [...subagents, ...Array.from(seenSubagents.values())];
+};
+
+app.get('/api/antigravity/subagents', async (_req, res) => {
+  try {
+    const list = await getAntigravitySubagents();
+    res.json(list);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to list Antigravity subagents' });
+  }
+});
 
 app.get('/api/cli/sessions', async (_req, res) => {
   const dir = getClaudeSessionsDir();
@@ -1540,32 +1897,12 @@ app.put('/api/claude-md', async (req, res) => {
 
 // Sync all skills into CLAUDE.md
 app.post('/api/skills/sync-all', async (_req, res) => {
-  const skills = await readJson(SKILLS_FILE, []);
-  let md = await fs.readFile(CLAUDE_MD, 'utf-8').catch(() => '# CLAUDE.md\n');
-  
-  // Remove old skills section if exists
-  const marker = '<!-- DASHBOARD_SKILLS_START -->';
-  const endMarker = '<!-- DASHBOARD_SKILLS_END -->';
-  const startIdx = md.indexOf(marker);
-  const endIdx = md.indexOf(endMarker);
-  if (startIdx !== -1 && endIdx !== -1) {
-    md = md.substring(0, startIdx) + md.substring(endIdx + endMarker.length);
+  try {
+    await syncAllSkillsToClaudeMd();
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to sync skills to CLAUDE.md' });
   }
-  
-  // Build skills section
-  const activeSkills = skills.filter((s: any) => s.active !== false);
-  if (activeSkills.length > 0) {
-    let section = `\n${marker}\n## 🛠 Active Skills (Dashboard Synced)\n\n`;
-    for (const s of activeSkills) {
-      section += `### ${s.name}\n- **Category:** ${s.category || 'custom'}\n- **Description:** ${s.description || 'N/A'}\n\n`;
-    }
-    section += `${endMarker}\n`;
-    md = md.trimEnd() + '\n' + section;
-  }
-  
-  await fs.writeFile(CLAUDE_MD, md, 'utf-8');
-  logActivity('skill-sync', `Synced ${activeSkills.length} skills to CLAUDE.md`, 'system');
-  res.json({ success: true, synced: activeSkills.length });
 });
 
 // ============ AI PROVIDERS CRUD ============

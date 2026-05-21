@@ -16,13 +16,7 @@ export default function AntigravityControlPanel() {
   const [skillsSaved, setSkillsSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draftSkills, setDraftSkills] = useState<string[]>([]); // Array of skill_keys assigned to Antigravity
-
-  const otherAgents = useMemo(() => {
-    if (!skillsOverview) return [];
-    return skillsOverview.targets.filter(
-      (t) => t.type === 'claude_agent' || t.type === 'codex_agent'
-    );
-  }, [skillsOverview]);
+  const [subagents, setSubagents] = useState<any[]>([]);
 
   useEffect(() => {
     loadData();
@@ -60,6 +54,14 @@ export default function AntigravityControlPanel() {
         )
         .map((skill: UnifiedSkill) => skill.skill_key);
       setDraftSkills(assigned);
+
+      // Fetch Antigravity Subagents
+      try {
+        const subagentsData = await api.getAntigravitySubagents();
+        setSubagents(subagentsData);
+      } catch (err) {
+        console.error('Failed to load Antigravity subagents:', err);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load Antigravity dashboard data');
     } finally {
@@ -197,29 +199,34 @@ export default function AntigravityControlPanel() {
             </div>
           </div>
 
-          {/* Peer Nodes */}
+          {/* Subagent Fleet */}
           <div className="mt-8 pt-6 border-t border-white/[0.04]">
-            <h4 className="text-xs font-black text-muted uppercase tracking-[0.2em] mb-4">Peer Autonomous Nodes</h4>
+            <h4 className="text-xs font-black text-muted uppercase tracking-[0.2em] mb-4">Antigravity Subagent Fleet</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {otherAgents.map((peer) => (
-                <div key={peer.target_key} className="flex items-center justify-between p-3 bg-white/[0.02] border border-white/5 rounded-xl hover:bg-white/[0.04] transition-colors">
-                  <div className="min-w-0">
-                    <span className="text-xs font-bold text-white block truncate">{peer.name}</span>
+              {subagents.map((sub) => (
+                <div key={sub.id} className="flex items-center justify-between p-3 bg-white/[0.02] border border-white/5 rounded-xl hover:bg-white/[0.04] transition-colors">
+                  <div className="min-w-0 pr-2">
+                    <span className="text-xs font-bold text-white block truncate">{sub.name}</span>
                     <span className="text-[9px] text-muted font-mono block uppercase tracking-wider mt-0.5">
-                      {peer.type === 'codex_agent' ? 'Codex Agent' : `Claude Node (${peer.metadata.model || 'N/A'})`}
+                      {sub.role} · {sub.type === 'static' ? 'System Core' : 'Session Agent'}
                     </span>
+                    {sub.prompt && (
+                      <span className="text-[9px] text-muted/60 italic block truncate mt-1" title={sub.prompt}>
+                        "{sub.prompt}"
+                      </span>
+                    )}
                   </div>
-                  <span className={`text-[9px] px-2 py-0.5 rounded-full border ${
-                    peer.status === 'active' || peer.status === 'Online' || peer.type === 'codex_agent'
-                      ? 'text-accent border-accent/20 bg-accent/5'
-                      : 'text-muted border-border bg-surface'
+                  <span className={`text-[9px] px-2 py-0.5 rounded-full border uppercase tracking-wider font-bold shrink-0 ${
+                    sub.status === 'active'
+                      ? 'text-accent border-accent/20 bg-accent/5 animate-pulse'
+                      : 'text-muted border-white/10 bg-white/5'
                   }`}>
-                    {peer.status || 'Active'}
+                    {sub.status}
                   </span>
                 </div>
               ))}
-              {otherAgents.length === 0 && (
-                <p className="text-xs text-muted">No other active fleet nodes found.</p>
+              {subagents.length === 0 && (
+                <p className="text-xs text-muted">No subagents found.</p>
               )}
             </div>
           </div>
@@ -298,6 +305,43 @@ export default function AntigravityControlPanel() {
               {(!antigravityOverview || antigravityOverview.files.length === 0) && (
                 <p className="text-xs text-muted text-center py-4">No global config files found.</p>
               )}
+            </div>
+          </div>
+
+          {/* Slash Commands Panel */}
+          <div className="glass-card">
+            <h3 className="text-lg font-bold text-white tracking-tight">Slash Commands Panel</h3>
+            <p className="text-[10px] text-muted font-bold uppercase tracking-widest mt-0.5">
+              Quick command actions
+            </p>
+            <div className="space-y-3.5 mt-5">
+              {[
+                { cmd: '/goal', scope: 'Antigravity', desc: 'Launch a long-running, extra-thorough autonomous task execution.' },
+                { cmd: '/schedule', scope: 'Antigravity', desc: 'Schedule a one-shot timer or a recurring background cron job.' },
+                { cmd: '/grill-me', scope: 'Antigravity', desc: 'Resolve plans and clarify ambiguous design choices with interactive questions.' },
+                { cmd: '/config', scope: 'Claude Code', desc: 'Configure default behaviors and options.' },
+                { cmd: '/compact', scope: 'Claude Code', desc: 'Force context window compaction to save token usage.' },
+                { cmd: '/clear', scope: 'Claude Code', desc: 'Reset conversation context and start fresh.' },
+                { cmd: '/help', scope: 'Claude Code', desc: 'Get quick help and CLI instructions.' }
+              ].map((sc) => (
+                <div key={sc.cmd} className="group p-3 bg-white/[0.01] border border-white/[0.04] rounded-xl hover:bg-white/[0.03] hover:border-primary/20 transition-all flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs font-black text-primary font-mono">{sc.cmd}</code>
+                      <span className="text-[8px] px-1.5 py-0.5 rounded bg-white/5 border border-white/5 text-muted uppercase font-bold tracking-wider">{sc.scope}</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(sc.cmd);
+                      }}
+                      className="text-[9px] text-muted group-hover:text-primary transition-colors uppercase font-bold tracking-widest hover:underline"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-muted/80 leading-relaxed font-medium">{sc.desc}</p>
+                </div>
+              ))}
             </div>
           </div>
         </div>

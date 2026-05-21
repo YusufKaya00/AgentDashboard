@@ -117,4 +117,28 @@ Claude Dashboard is a unified **Command & Control & Observability** panel for lo
 - **Category:** custom
 - **Description:** u need to organize to task speed up  u can skip thinking sections extra
 
+### performance-tuning
+- **Category:** performance
+- **Description:** Optimize Next.js web application load time, asset delivery, and database query latency.
+
+### seo-optimization
+- **Category:** marketing-seo
+- **Description:** Scan pages to automatically audit and implement metadata, structured schema markup, and Google Search Console compliance.
+
+### vitest-testing
+- **Category:** qa-testing
+- **Description:** Generate high-coverage unit and integration tests using Vitest and React Testing Library.
+
+### dependency-sec-audit
+- **Category:** security
+- **Description:** Run npm audit, verify package licenses, check for deprecations, and upgrade safe dependencies.
+
+### tailwind-refactoring
+- **Category:** styling
+- **Description:** Convert custom CSS and inline styling to modern Tailwind utility classes using optimal design tokens.
+
+### framer-motion-effects
+- **Category:** ui-ux
+- **Description:** Design and implement premium glassmorphic hover animations and page transition effects.
+
 <!-- DASHBOARD_SKILLS_END -->

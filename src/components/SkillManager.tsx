@@ -48,6 +48,40 @@ export default function SkillManager() {
     description: '',
     category: 'custom',
   });
+  const [activeTargetTab, setActiveTargetTab] = useState<'claude' | 'antigravity' | 'codex' | 'infrastructure'>('claude');
+
+  const activeTypes = useMemo(() => {
+    switch (activeTargetTab) {
+      case 'claude':
+        return ['claude_agent'] as AITargetType[];
+      case 'antigravity':
+        return ['antigravity_agent'] as AITargetType[];
+      case 'codex':
+        return ['codex_agent'] as AITargetType[];
+      case 'infrastructure':
+        return ['model', 'provider'] as AITargetType[];
+    }
+  }, [activeTargetTab]);
+
+  const getActiveTabTargets = () => {
+    return overview?.targets.filter((target) => activeTypes.includes(target.type)) || [];
+  };
+
+  const handleSelectAll = () => {
+    const currentTabTargetKeys = getActiveTabTargets().map(t => t.target_key);
+    setDraftTargetKeys(prev => {
+      const next = [...prev];
+      currentTabTargetKeys.forEach(key => {
+        if (!next.includes(key)) next.push(key);
+      });
+      return next;
+    });
+  };
+
+  const handleDeselectAll = () => {
+    const currentTabTargetKeys = getActiveTabTargets().map(t => t.target_key);
+    setDraftTargetKeys(prev => prev.filter(key => !currentTabTargetKeys.includes(key)));
+  };
 
   const loadOverview = async () => {
     try {
@@ -283,35 +317,79 @@ export default function SkillManager() {
                   <span className={`badge ${sourceStyles[selectedSkill.source]}`}>{sourceLabels[selectedSkill.source]}</span>
                 </div>
 
-                <div className="space-y-5 mt-7">
-                  {targetOrder.map((type) => {
+                {/* Internal Tabs for Targets */}
+                <div className="flex border-b border-white/5 mt-6 mb-4">
+                  {(['claude', 'antigravity', 'codex', 'infrastructure'] as const).map((tab) => {
+                    const labels = {
+                      claude: 'Claude Fleet',
+                      antigravity: 'Antigravity Core',
+                      codex: 'Codex Engine',
+                      infrastructure: 'Infrastructure',
+                    };
+                    return (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setActiveTargetTab(tab)}
+                        className={`flex-1 pb-2 text-[10px] font-black uppercase tracking-wider transition-all border-b-2 text-center ${
+                          activeTargetTab === tab
+                            ? 'border-primary text-primary'
+                            : 'border-transparent text-muted hover:text-white'
+                        }`}
+                      >
+                        {labels[tab]}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Bulk Select Actions */}
+                <div className="flex gap-2 mb-4 justify-end">
+                  <button
+                    type="button"
+                    onClick={handleSelectAll}
+                    className="btn btn-secondary py-1 px-3 text-[9px] uppercase font-bold tracking-wider"
+                  >
+                    Select All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeselectAll}
+                    className="btn btn-secondary py-1 px-3 text-[9px] uppercase font-bold tracking-wider"
+                  >
+                    Deselect All
+                  </button>
+                </div>
+
+                <div className="space-y-5 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
+                  {activeTypes.map((type) => {
                     const targets = targetGroups.get(type) || [];
+                    if (targets.length === 0) return null;
                     return (
                       <div key={type} className="space-y-3">
                         <h3 className="text-[10px] font-black text-muted uppercase tracking-widest">{targetLabels[type]}</h3>
-                        {targets.length === 0 ? (
-                          <p className="text-xs text-white/30">No targets registered.</p>
-                        ) : (
-                          <div className="space-y-2">
-                            {targets.map((target) => (
-                              <label key={target.target_key} className="flex items-center justify-between gap-4 p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 cursor-pointer">
-                                <div className="min-w-0">
-                                  <div className="text-sm font-bold text-white truncate">{target.name}</div>
-                                  <div className="text-[10px] text-muted font-mono truncate">{target.target_key}</div>
-                                </div>
-                                <input
-                                  type="checkbox"
-                                  checked={draftTargetKeys.includes(target.target_key)}
-                                  onChange={() => toggleDraftTarget(target.target_key)}
-                                  className="w-4 h-4 accent-[var(--primary)]"
-                                />
-                              </label>
-                            ))}
-                          </div>
-                        )}
+                        <div className="space-y-2">
+                          {targets.map((target) => (
+                            <label key={target.target_key} className="flex items-center justify-between gap-4 p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 cursor-pointer transition-colors">
+                              <div className="min-w-0">
+                                <div className="text-sm font-bold text-white truncate">{target.name}</div>
+                                <div className="text-[10px] text-muted font-mono truncate">{target.target_key}</div>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={draftTargetKeys.includes(target.target_key)}
+                                onChange={() => toggleDraftTarget(target.target_key)}
+                                className="w-4 h-4 accent-[var(--primary)] cursor-pointer"
+                              />
+                            </label>
+                          ))}
+                        </div>
                       </div>
                     );
                   })}
+                  {getActiveTabTargets().length === 0 && (
+                    <p className="text-xs text-white/30 text-center py-6">No targets registered in this category.</p>
+                  )}
                 </div>
 
                 <button
