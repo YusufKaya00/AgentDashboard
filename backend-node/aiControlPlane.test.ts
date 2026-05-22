@@ -18,6 +18,7 @@ describe('ai control plane', () => {
           enabled: true,
         },
       ],
+      [], // geminiSkills
       [
         {
           id: 'systematic-debugging',

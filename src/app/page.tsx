@@ -19,8 +19,9 @@ import AIProviderManager from '@/components/AIProviderManager';
 import CLAUDEEditor from '@/components/CLAUDEEditor';
 import CodexControlPanel from '@/components/CodexControlPanel';
 import AntigravityControlPanel from '@/components/AntigravityControlPanel';
+import ClaudeControlPanel from '@/components/ClaudeControlPanel';
 
-type DashboardTab = 'dashboard' | 'agents' | 'antigravity' | 'skills' | 'claude-editor' | 'clisessions' | 'codex' | 'terminal' | 'tasks' | 'activity' | 'system' | 'hooks' | 'analytics' | 'providers' | 'models';
+type DashboardTab = 'dashboard' | 'agents' | 'antigravity' | 'skills' | 'clisessions' | 'codex' | 'terminal' | 'tasks' | 'activity' | 'system' | 'hooks' | 'analytics' | 'models';
 
 export default function Home() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -45,11 +46,11 @@ export default function Home() {
 
   const mapTargetsToAgents = (targets: AITarget[]): Agent[] => {
     return targets
-      .filter(t => t.type === 'claude_agent' || t.type === 'antigravity_agent' || t.type === 'codex_agent')
+      .filter(t => t.type === 'claude_agent' || t.type === 'antigravity_agent' || t.type === 'codex_agent' || t.type === 'subagent')
       .map(t => ({
         id: t.id,
         name: t.name,
-        description: (t.metadata.role as string) || (t.type === 'antigravity_agent' ? 'Autonomous Core Agent' : 'Sub-Agent Node'),
+        description: (t.metadata.description as string) || (t.metadata.role as string) || (t.type === 'antigravity_agent' ? 'Autonomous Core Agent' : 'Sub-Agent Node'),
         model: (t.metadata.model as string) || (t.type === 'codex_agent' ? 'Codex Engine' : 'N/A'),
         status: t.status === 'active' || t.status === 'Online' || t.type === 'codex_agent' ? 'active' : (t.status === 'error' ? 'error' : 'inactive'),
         config: { type: t.type },
@@ -204,8 +205,8 @@ export default function Home() {
 
       {activeTab === 'agents' && (
         <div className="animate-fade-in space-y-6">
-          <PageHeader title="Agent" subtitle="Management" accent="Nodes" />
-          <AgentList agents={agents} onRefresh={refreshAgents} showAll />
+          <PageHeader title="Claude Code" subtitle="Control" accent="Runtime" />
+          <ClaudeControlPanel />
         </div>
       )}
 
@@ -244,12 +245,7 @@ export default function Home() {
         </div>
       )}
 
-      {activeTab === 'claude-editor' && (
-        <div className="animate-fade-in space-y-6">
-          <PageHeader title="CLAUDE.md" subtitle="Editor" accent="Documentation" />
-          <CLAUDEEditor />
-        </div>
-      )}
+
 
       {activeTab === 'system' && (
         <div className="animate-fade-in space-y-6">
@@ -272,12 +268,7 @@ export default function Home() {
         </div>
       )}
 
-      {activeTab === 'providers' && (
-        <div className="animate-fade-in space-y-6">
-          <PageHeader title="AI" subtitle="Providers" accent="Connectivity" />
-          <AIProviderManager />
-        </div>
-      )}
+
 
       {activeTab === 'models' && (
         <div className="animate-fade-in space-y-6">

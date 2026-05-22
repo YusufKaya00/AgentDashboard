@@ -17,6 +17,35 @@ export default function AntigravityControlPanel() {
   const [error, setError] = useState<string | null>(null);
   const [draftSkills, setDraftSkills] = useState<string[]>([]); // Array of skill_keys assigned to Antigravity
   const [subagents, setSubagents] = useState<any[]>([]);
+  const [editingSubId, setEditingSubId] = useState<string | null>(null);
+  const [editRole, setEditRole] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editRules, setEditRules] = useState('');
+  const [savingSubagent, setSavingSubagent] = useState(false);
+
+  const handleStartEdit = (sub: any) => {
+    setEditingSubId(sub.id);
+    setEditRole(sub.role || '');
+    setEditDescription(sub.description || '');
+    setEditRules(sub.rules || '');
+  };
+
+  const handleSaveSubagent = async (id: string) => {
+    setSavingSubagent(true);
+    try {
+      await api.updateAntigravitySubagent(id, {
+        role: editRole,
+        description: editDescription,
+        rules: editRules,
+      });
+      setEditingSubId(null);
+      await loadData();
+    } catch (err: any) {
+      alert('Failed to save subagent changes: ' + err.message);
+    } finally {
+      setSavingSubagent(false);
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -204,25 +233,122 @@ export default function AntigravityControlPanel() {
             <h4 className="text-xs font-black text-muted uppercase tracking-[0.2em] mb-4">Antigravity Subagent Fleet</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {subagents.map((sub) => (
-                <div key={sub.id} className="flex items-center justify-between p-3 bg-white/[0.02] border border-white/5 rounded-xl hover:bg-white/[0.04] transition-colors">
-                  <div className="min-w-0 pr-2">
-                    <span className="text-xs font-bold text-white block truncate">{sub.name}</span>
-                    <span className="text-[9px] text-muted font-mono block uppercase tracking-wider mt-0.5">
-                      {sub.role} · {sub.type === 'static' ? 'System Core' : 'Session Agent'}
-                    </span>
-                    {sub.prompt && (
-                      <span className="text-[9px] text-muted/60 italic block truncate mt-1" title={sub.prompt}>
-                        "{sub.prompt}"
-                      </span>
-                    )}
-                  </div>
-                  <span className={`text-[9px] px-2 py-0.5 rounded-full border uppercase tracking-wider font-bold shrink-0 ${
-                    sub.status === 'active'
-                      ? 'text-accent border-accent/20 bg-accent/5 animate-pulse'
-                      : 'text-muted border-white/10 bg-white/5'
-                  }`}>
-                    {sub.status}
-                  </span>
+                <div key={sub.id} className="flex items-start justify-between p-3.5 bg-white/[0.02] border border-white/5 rounded-xl hover:bg-white/[0.03] hover:border-white/10 transition-all">
+                  {editingSubId === sub.id ? (
+                    <div className="w-full space-y-3 pr-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-white">{sub.name} (Editing)</span>
+                        <span className="text-[9.5px] text-primary font-mono block uppercase tracking-wider font-bold">
+                          {sub.type === 'static' ? 'System Core' : 'Session Agent'}
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <label className="text-[8px] font-black text-muted uppercase tracking-widest block">Role / Persona Title</label>
+                        <input
+                          type="text"
+                          value={editRole}
+                          onChange={(e) => setEditRole(e.target.value)}
+                          className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary/50 transition-colors"
+                          placeholder="e.g. Codebase Researcher"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[8px] font-black text-muted uppercase tracking-widest block">Description</label>
+                        <input
+                          type="text"
+                          value={editDescription}
+                          onChange={(e) => setEditDescription(e.target.value)}
+                          className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-primary/50 transition-colors"
+                          placeholder="What this subagent is specialized in..."
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[8px] font-black text-muted uppercase tracking-widest block">Operational Rules & Guidelines</label>
+                        <textarea
+                          value={editRules}
+                          onChange={(e) => setEditRules(e.target.value)}
+                          className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-accent font-mono h-24 focus:outline-none focus:border-primary/50 transition-colors resize-none leading-normal"
+                          placeholder="Write rules or prompts for this subagent..."
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1 justify-end">
+                        <button
+                          onClick={() => setEditingSubId(null)}
+                          disabled={savingSubagent}
+                          className="px-2.5 py-1 text-[9px] uppercase font-black tracking-wider rounded border border-white/10 text-muted hover:bg-white/5 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => handleSaveSubagent(sub.id)}
+                          disabled={savingSubagent}
+                          className="px-3 py-1 text-[9px] uppercase font-black tracking-wider rounded bg-primary text-black hover:bg-primary/90 transition-colors"
+                        >
+                          {savingSubagent ? 'Saving...' : 'Save'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="min-w-0 pr-2 flex-grow">
+                        <span className="text-xs font-bold text-white block truncate">{sub.name}</span>
+                        <span className="text-[9px] text-muted font-mono block uppercase tracking-wider mt-0.5">
+                          {sub.role} · {sub.type === 'static' ? 'System Core' : 'Session Agent'}
+                        </span>
+                        {sub.description && (
+                          <p className="text-[9px] text-muted mt-1 leading-normal">{sub.description}</p>
+                        )}
+                        {sub.rules && (
+                          <div className="text-[9px] text-accent/80 font-mono mt-1.5 border-l-2 border-accent/30 pl-2 py-0.5 leading-normal">
+                            <span className="font-bold text-[8px] uppercase tracking-wider text-accent/50 block">Rules:</span>
+                            {sub.rules}
+                          </div>
+                        )}
+                        {sub.prompt && (
+                          <span className="text-[9px] text-muted/60 italic block truncate mt-1" title={sub.prompt}>
+                            "{sub.prompt}"
+                          </span>
+                        )}
+                        {/* Assigned Skills */}
+                        {skillsOverview && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {skillsOverview.skills
+                              .filter(skill => skill.assigned_targets.some(t => t.target_key === `subagent:${sub.id}`))
+                              .map(skill => (
+                                <span key={skill.skill_key} className="text-[8px] px-1.5 py-0.5 rounded bg-primary/15 border border-primary/30 text-primary uppercase font-bold tracking-wider">
+                                  {skill.name}
+                                </span>
+                              ))
+                            }
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end justify-between shrink-0 gap-3 self-stretch min-h-[44px]">
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full border uppercase tracking-wider font-bold ${
+                          sub.status === 'active'
+                            ? 'text-accent border-accent/20 bg-accent/5 animate-pulse'
+                            : 'text-muted border-white/10 bg-white/5'
+                        }`}>
+                          {sub.status}
+                        </span>
+                        {sub.type === 'static' && (
+                          <button
+                            onClick={() => handleStartEdit(sub)}
+                            className="text-[9px] px-2 py-1 text-muted hover:text-white border border-white/5 hover:border-white/20 rounded-md bg-white/[0.02] hover:bg-white/[0.04] transition-all flex items-center gap-1 font-bold uppercase tracking-wider"
+                          >
+                            <svg className="w-2.5 h-2.5 fill-current text-muted hover:text-white" viewBox="0 0 24 24">
+                              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                            </svg>
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
               {subagents.length === 0 && (

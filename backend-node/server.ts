@@ -36,6 +36,7 @@ const execAsync = promisify(exec);
 // ============ PATHS ============
 const ROOT_DIR = path.resolve(__dirname, process.env.WORKSPACE_DIR || '..');
 const CLAUDE_DIR = path.join(os.homedir(), '.gemini', 'antigravity');
+const SUBAGENTS_METADATA_FILE = path.join(CLAUDE_DIR, 'subagents.json');
 
 const localClaudeDir = path.join(ROOT_DIR, '.claude');
 // Ensure global directory structure exists
@@ -225,13 +226,16 @@ const normalizeSkill = (skill: any) => {
 };
 
 const getAIControlPlaneOverview = async () => {
-  const [agents, claudeSkills, models, providers, assignments, codexInventory] = await Promise.all([
+  const localSkillsFile = path.join(ROOT_DIR, '.claude', 'skills.json');
+  const [agents, geminiSkills, localClaudeSkills, models, providers, assignments, codexInventory, subagents] = await Promise.all([
     readJson(AGENTS_METADATA_FILE, []),
     readJson(SKILLS_FILE, []),
+    readJson(localSkillsFile, []),
     getMergedModels(),
     readJson(PROVIDERS_FILE, []),
     readJson(SKILL_ASSIGNMENTS_FILE, []),
     getCodexInventory({ codexHome: path.join(os.homedir(), '.codex'), workspaceDir: ROOT_DIR }),
+    getAntigravitySubagents(),
   ]);
 
   const normalizedAssignments = Array.isArray(assignments) ? assignments as SkillAssignment[] : [];
@@ -240,9 +244,11 @@ const getAIControlPlaneOverview = async () => {
     codexAgents: codexInventory.agents,
     models: Array.isArray(models) ? models : [],
     providers: Array.isArray(providers) ? providers : [],
+    subagents: Array.isArray(subagents) ? subagents : [],
   });
   const skills = buildUnifiedSkills(
-    Array.isArray(claudeSkills) ? claudeSkills.map(normalizeSkill) : [],
+    Array.isArray(localClaudeSkills) ? localClaudeSkills.map(normalizeSkill) : [],
+    Array.isArray(geminiSkills) ? geminiSkills.map(normalizeSkill) : [],
     codexInventory.skills.items,
     normalizedAssignments
   );
@@ -256,7 +262,8 @@ const getAIControlPlaneOverview = async () => {
       targets: targets.length,
       assignments: normalizedAssignments.length,
       codex_skills: codexInventory.skills.total,
-      claude_skills: Array.isArray(claudeSkills) ? claudeSkills.length : 0,
+      claude_skills: Array.isArray(localClaudeSkills) ? localClaudeSkills.length : 0,
+      gemini_skills: Array.isArray(geminiSkills) ? geminiSkills.length : 0,
     },
   };
 };
@@ -506,7 +513,10 @@ curl -s -X POST http://127.0.0.1:8000/api/hooks/trigger \\
 installGitHooks();
 
 app.get('/api/agents/summary', async (_req, res) => {
-  const claudeAndAgAgents = await readJson(AGENTS_METADATA_FILE, []);
+  const [claudeAndAgAgents, subagents] = await Promise.all([
+    readJson(AGENTS_METADATA_FILE, []),
+    getAntigravitySubagents(),
+  ]);
   let codexAgents: any[] = [];
   try {
     const codexHome = path.join(os.homedir(), '.codex');
@@ -516,6 +526,7 @@ app.get('/api/agents/summary', async (_req, res) => {
 
   const allAgents = [
     ...claudeAndAgAgents,
+    ...subagents,
     ...codexAgents.map((a: any) => ({
       id: a.id,
       name: a.name,
@@ -1452,6 +1463,54 @@ app.get('/api/antigravity/overview', async (_req, res) => {
   }
 });
 
+// ============ CLAUDE OBSERVABILITY ============
+app.get('/api/claude/overview', async (_req, res) => {
+  try {
+    const claudeHome = path.join(os.homedir(), '.claude');
+    const localClaude = path.join(ROOT_DIR, '.claude');
+    const available = await fs.pathExists(localClaude);
+    
+    const configFiles = ['agents.json', 'models.json', 'hooks.json', 'skills.json', 'tasks.json'];
+    const fileSummaries = await Promise.all(
+      configFiles.map(async (name) => {
+        const fp = path.join(localClaude, name);
+        const exists = await fs.pathExists(fp);
+        let size = 0;
+        let updatedAt = null;
+        if (exists) {
+          const stats = await fs.stat(fp);
+          size = stats.size;
+          updatedAt = stats.mtime.toISOString();
+        }
+        return { name, exists, size, updated_at: updatedAt };
+      })
+    );
+
+    const agents = await readJson(path.join(localClaude, 'agents.json'), []);
+    const skills = await readJson(path.join(localClaude, 'skills.json'), []);
+
+    res.json({
+      runtime: {
+        name: 'Claude Code',
+        home_dir: claudeHome,
+        local_dir: localClaude,
+        workspace_dir: ROOT_DIR,
+        available,
+      },
+      agents: Array.isArray(agents) ? agents : [],
+      skills: {
+        total: Array.isArray(skills) ? skills.length : 0,
+        items: Array.isArray(skills) ? skills : [],
+      },
+      config: {
+        files: fileSummaries,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to inspect Claude runtime' });
+  }
+});
+
 // ============ CLI SESSION READER ============
 const getClaudeSessionsDir = () => {
   const home = os.homedir();
@@ -1612,14 +1671,15 @@ const getAntigravitySessions = () => {
 };
 
 const getAntigravitySubagents = async () => {
-  const subagents = [
+  const defaultSubagents = [
     {
       id: 'research',
       name: 'research',
       role: 'Codebase Researcher',
       description: 'Research subagent with read-only tools for exploring the codebase and searching the web.',
       status: 'idle',
-      type: 'static'
+      type: 'static',
+      rules: 'Only use read-only tools. Search the web for official documentation. Never write or modify source code files.'
     },
     {
       id: 'self',
@@ -1627,9 +1687,54 @@ const getAntigravitySubagents = async () => {
       role: 'Autonomous Clone',
       description: 'Autonomous clone inheriting the parent agent\'s configuration and tools.',
       status: 'idle',
-      type: 'static'
+      type: 'static',
+      rules: 'Inherit and run all operations in parallel. Ensure absolute code correctness. Double-check all plan checkpoints.'
+    },
+    {
+      id: 'frontend',
+      name: 'frontend',
+      role: 'Frontend Developer',
+      description: 'Specialized in UI component creation, layout polishing, styling, and Next.js frontend architectures.',
+      status: 'idle',
+      type: 'static',
+      rules: 'Prioritize premium UI aesthetics, custom CSS animations, proper responsive structures, SEO tags, and precise HTML hierarchy.'
+    },
+    {
+      id: 'backend',
+      name: 'backend',
+      role: 'Backend Developer',
+      description: 'Specialized in API endpoint development, database integrations, routers, and server orchestration.',
+      status: 'idle',
+      type: 'static',
+      rules: 'Prioritize clean modular endpoint architectures, strict error handling, inputs validation, security, and logging.'
+    },
+    {
+      id: 'tester',
+      name: 'tester',
+      role: 'QA & Test Engineer',
+      description: 'Specialized in automated test writing, code verification, unit testing, and functionality debugging.',
+      status: 'idle',
+      type: 'static',
+      rules: 'Focus on edge cases coverage, automated unit and integration tests, reporting clean assertions, and verifying builds.'
     }
   ];
+
+  let subagents = defaultSubagents;
+
+  if (fs.existsSync(SUBAGENTS_METADATA_FILE)) {
+    try {
+      const data = fs.readFileSync(SUBAGENTS_METADATA_FILE, 'utf-8');
+      subagents = JSON.parse(data);
+    } catch (e) {
+      console.error('Error reading subagents.json, falling back to defaults:', e);
+    }
+  } else {
+    try {
+      fs.writeFileSync(SUBAGENTS_METADATA_FILE, JSON.stringify(defaultSubagents, null, 2), 'utf-8');
+    } catch (e) {
+      console.error('Error writing default subagents.json:', e);
+    }
+  }
 
   const dirs = getAntigravitySessionsDirs();
   const seenSubagents = new Map<string, any>();
@@ -1705,6 +1810,45 @@ app.get('/api/antigravity/subagents', async (_req, res) => {
     res.status(500).json({ error: error.message || 'Failed to list Antigravity subagents' });
   }
 });
+
+app.put('/api/antigravity/subagents/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role, description, rules } = req.body;
+
+    if (!fs.existsSync(SUBAGENTS_METADATA_FILE)) {
+      await getAntigravitySubagents();
+    }
+
+    let subagents: any[] = [];
+    try {
+      const data = await fs.readFile(SUBAGENTS_METADATA_FILE, 'utf-8');
+      subagents = JSON.parse(data);
+    } catch (e) {
+      return res.status(500).json({ error: 'Failed to read subagents metadata file' });
+    }
+
+    const idx = subagents.findIndex((s: any) => s.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ error: `Subagent with id ${id} not found in static subagents config` });
+    }
+
+    // Update fields
+    subagents[idx] = {
+      ...subagents[idx],
+      role: role !== undefined ? role : subagents[idx].role,
+      description: description !== undefined ? description : subagents[idx].description,
+      rules: rules !== undefined ? rules : subagents[idx].rules,
+    };
+
+    await fs.writeFile(SUBAGENTS_METADATA_FILE, JSON.stringify(subagents, null, 2), 'utf-8');
+    await logActivity('subagent', `Updated subagent metadata: ${id}`, 'system');
+    res.json(subagents[idx]);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to update subagent metadata' });
+  }
+});
+
 
 app.get('/api/cli/sessions', async (_req, res) => {
   const dir = getClaudeSessionsDir();

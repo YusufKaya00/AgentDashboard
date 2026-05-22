@@ -175,8 +175,8 @@ export interface CodexOverview {
   };
 }
 
-export type SkillSource = 'claude' | 'codex-system' | 'codex-plugin' | 'codex-user';
-export type AITargetType = 'claude_agent' | 'codex_agent' | 'antigravity_agent' | 'model' | 'provider';
+export type SkillSource = 'claude' | 'gemini' | 'codex-system' | 'codex-plugin' | 'codex-user';
+export type AITargetType = 'claude_agent' | 'codex_agent' | 'antigravity_agent' | 'model' | 'provider' | 'subagent';
 
 export interface SkillAssignment {
   skill_key: string;
@@ -195,7 +195,7 @@ export interface UnifiedSkill {
   name: string;
   description: string;
   source: SkillSource;
-  origin: 'claude' | 'codex';
+  origin: 'claude' | 'gemini' | 'codex';
   category: string;
   enabled: boolean;
   file_path?: string;
@@ -222,6 +222,7 @@ export interface AIControlPlaneOverview {
     assignments: number;
     codex_skills: number;
     claude_skills: number;
+    gemini_skills: number;
   };
 }
 
@@ -234,4 +235,22 @@ export interface AntigravityOverview {
     size: number;
     updated_at: string | null;
   }>;
+}
+
+export interface ClaudeOverview {
+  runtime: {
+    name: 'Claude Code';
+    home_dir: string;
+    local_dir: string;
+    workspace_dir: string;
+    available: boolean;
+  };
+  agents: any[];
+  skills: {
+    total: number;
+    items: any[];
+  };
+  config: {
+    files: Array<{ name: string; exists: boolean; size: number; updated_at: string | null }>;
+  };
 }

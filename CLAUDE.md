@@ -1,74 +1,65 @@
-# Claude Dashboard v4.0 - Node.js Architecture Guide
+# Workflow Orchestration
 
-## 📋 Project Overview
-Claude Dashboard is a unified **Command & Control & Observability** panel for local AI operations. It synchronizes directly with the **Claude CLI** by reading local session history and workspace state, providing a high-performance management interface.
+## 1. Plan Mode Default
 
-## 🎯 Key Features
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan immediately — don't keep pushing
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
 
-### 1. Direct CLI Observability (New)
-- **Session History**: Reads `.jsonl` session files directly from `~/.claude/projects/` (No proxy needed).
-- **Split-Pane Viewer**: Visualizes full conversation transcripts including tool calls, plan-mode todo lists, and model metadata.
-- **Project Auto-Detection**: Automatically identifies the current workspace based on the project path.
+## 2. Subagent Strategy
 
-### 2. Markdown-Driven Agent Management
-- **Persona Storage**: All agent intelligence is stored in `.claude/agents/*.md`.
-- **Live Editing**: Modify agent prompts and metadata via the dashboard; changes are reflected instantly in the workspace.
-- **Agent Registry**: Centralized management of specialized agents in `agents.json`.
+- Use subagents liberally to keep main context window clean
+- Offload research, exploration, and parallel analysis to subagents
+- For complex problems, throw more compute at it via subagents
+- One task per subagent for focused execution
 
-### 3. Monitoring & Automation
-- **Unified Activity Feed**: Real-time WebSocket updates for file modifications and agent events.
-- **Hook Engine**: Trigger automated actions (scripts/commands) when workspace files are modified.
-- **System Health**: Monitoring CPU, Memory, and Storage usage of the AI environment.
+## 3. Self-Improvement Loop
 
-## 🏗 Technical Architecture
+- After ANY correction from the user: update `tasks/lessons.md` with the pattern
+- Write rules for yourself that prevent the same mistake
+- Ruthlessly iterate on these lessons until mistake rate drops
+- Review lessons at session start for relevant project
 
-### Backend (Node.js/TypeScript)
-- `backend-node/server.ts`: High-performance Express.js server + WebSocket (wss) provider.
-- **File Watcher (Chokidar)**: Monitors workspace changes in real-time.
-- **Session Parser**: Robust JSONL parsing logic to reconstruct CLI conversations.
-- **Unified Storage**: Central management of `.claude/` JSON and MD files.
+## 4. Verification Before Done
 
-### Frontend (Next.js/TypeScript)
-- **CLISessions**: Specialized view for inspecting Claude CLI history.
-- **AgentSummary & SystemStatus**: Real-time resource monitoring and agent distribution.
-- **ModelList & SkillManager**: Management interfaces for AI capabilities and configurations.
+- Never mark a task complete without proving it works
+- Diff behavior between main and your changes when relevant
+- Ask yourself: "Would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness
 
-## 📂 Directory Structure
-- `.claude/`: **Core Project Data**
-  - `agents/`: Markdown persona files (The source of truth).
-  - `data/activities.json`: Log of workspace events.
-  - `models.json`, `hooks.json`, `skills.json`: System-wide configurations.
-- `backend-node/`: **Main Backend Service**
-  - `server.ts`: The entry point for the API and WebSocket server.
-  - `package.json`: Powered by `tsx` for fast TypeScript execution.
-- `src/`: **Next.js Dashboard Source**
+## 5. Demand Elegance (Balanced)
 
-## 🚀 Operational Commands
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes — don't over-engineer
+- Challenge your own work before presenting it
 
-### Development
-1. **Start Backend**: 
-   ```bash
-   cd backend-node && npm run dev
-   ```
-2. **Start Frontend**: 
-   ```bash
-   npm run dev
-   ```
-3. **Access Dashboard**: `http://localhost:3000`
+## 6. Autonomous Bug Fixing
 
-### Core Paths
-- **API Base**: `http://localhost:8000/api`
-- **WebSocket**: `ws://localhost:8000`
-- **CLI Sessions**: Local storage in `~/.claude/projects/`
-
-## 🛠 Coding Standards
-- **Unified Stack**: Use TypeScript for both Frontend and Backend.
-- **Backend Execution**: Always use `tsx` for running the backend (avoids ESM/CJS conflicts).
-- **Styling**: TailwindCSS for the dashboard UI.
-- **Data Persistence**: Prefer JSON and Markdown in `.claude/` directory over external databases.
+- When given a bug report: just fix it. Don't ask for hand-holding
+- Point at logs, errors, failing tests — then resolve them
+- Zero context switching required from the user
+- Go fix failing CI tests without being told how
 
 ---
-*Optimized for AI Agents and Senior Developers. Maintain the single-language (TypeScript) architecture at all costs.*
+
+# Task Management
+
+1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
+2. **Verify Plan**: Check in before starting implementation
+3. **Track Progress**: Mark items complete as you go
+4. **Explain Changes**: High-level summary at each step
+5. **Document Results**: Add review section to `tasks/todo.md`
+6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
+
+---
+
+# Core Principles
+
+- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
+- **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
 
 <!-- DASHBOARD_SKILLS_START -->
 ## 🛠 Active Skills (Dashboard Synced)
@@ -112,10 +103,6 @@ Claude Dashboard is a unified **Command & Control & Observability** panel for lo
 ### claude-api
 - **Category:** development
 - **Description:** Build, debug, and optimize Claude API / Anthropic SDK apps
-
-### speed up
-- **Category:** custom
-- **Description:** u need to organize to task speed up  u can skip thinking sections extra
 
 ### performance-tuning
 - **Category:** performance

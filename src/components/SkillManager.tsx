@@ -7,6 +7,7 @@ import type { AIControlPlaneOverview, AITarget, AITargetType, SkillSource, Unifi
 const sourceLabels: Record<SkillSource | 'all', string> = {
   all: 'All',
   claude: 'Claude',
+  gemini: 'Antigravity / Gemini',
   'codex-system': 'Codex System',
   'codex-plugin': 'Codex Plugin',
   'codex-user': 'Codex User',
@@ -14,6 +15,7 @@ const sourceLabels: Record<SkillSource | 'all', string> = {
 
 const sourceStyles: Record<SkillSource, string> = {
   claude: 'text-primary border-primary/30 bg-primary/10',
+  gemini: 'text-warning border-warning/30 bg-warning/10',
   'codex-system': 'text-info border-info/30 bg-info/10',
   'codex-plugin': 'text-secondary border-secondary/30 bg-secondary/10',
   'codex-user': 'text-accent border-accent/30 bg-accent/10',
@@ -25,9 +27,10 @@ const targetLabels: Record<AITargetType, string> = {
   antigravity_agent: 'Antigravity Core',
   model: 'Models',
   provider: 'Providers',
+  subagent: 'Subagents',
 };
 
-const targetOrder: AITargetType[] = ['claude_agent', 'antigravity_agent', 'codex_agent', 'model', 'provider'];
+const targetOrder: AITargetType[] = ['claude_agent', 'antigravity_agent', 'subagent', 'codex_agent', 'model', 'provider'];
 
 const getSkillTargets = (skill: UnifiedSkill, targets: AITarget[]) => {
   const assignedKeys = new Set(skill.assigned_targets.map((assignment) => assignment.target_key));
@@ -55,7 +58,7 @@ export default function SkillManager() {
       case 'claude':
         return ['claude_agent'] as AITargetType[];
       case 'antigravity':
-        return ['antigravity_agent'] as AITargetType[];
+        return ['antigravity_agent', 'subagent'] as AITargetType[];
       case 'codex':
         return ['codex_agent'] as AITargetType[];
       case 'infrastructure':
@@ -197,10 +200,11 @@ export default function SkillManager() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-5">
         {[
           { label: 'Unified Skills', value: overview.summary.skills },
           { label: 'Claude Skills', value: overview.summary.claude_skills },
+          { label: 'Gemini Skills', value: overview.summary.gemini_skills },
           { label: 'Codex Skills', value: overview.summary.codex_skills },
           { label: 'Assignments', value: overview.summary.assignments },
         ].map((item) => (
@@ -250,7 +254,7 @@ export default function SkillManager() {
               <p className="text-[10px] text-muted font-bold uppercase tracking-widest mt-1">Claude + Codex capabilities</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {(['all', 'claude', 'codex-system', 'codex-plugin', 'codex-user'] as const).map((source) => (
+              {(['all', 'claude', 'gemini', 'codex-system', 'codex-plugin', 'codex-user'] as const).map((source) => (
                 <button
                   key={source}
                   onClick={() => setSelectedSource(source)}

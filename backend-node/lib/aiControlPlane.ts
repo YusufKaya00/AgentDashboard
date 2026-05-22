@@ -1,7 +1,7 @@
 import type { CodexInventory } from './codexInventory.js';
 
-export type SkillSource = 'claude' | 'codex-system' | 'codex-plugin' | 'codex-user';
-export type TargetType = 'claude_agent' | 'codex_agent' | 'antigravity_agent' | 'model' | 'provider';
+export type SkillSource = 'claude' | 'gemini' | 'codex-system' | 'codex-plugin' | 'codex-user';
+export type TargetType = 'claude_agent' | 'codex_agent' | 'antigravity_agent' | 'model' | 'provider' | 'subagent';
 
 export interface DashboardSkill {
   id: string;
@@ -52,7 +52,7 @@ export interface UnifiedSkill {
   name: string;
   description: string;
   source: SkillSource;
-  origin: 'claude' | 'codex';
+  origin: 'claude' | 'gemini' | 'codex';
   category: string;
   enabled: boolean;
   file_path?: string | undefined;
@@ -74,6 +74,7 @@ export interface BuildTargetInput {
   codexAgents: CodexInventory['agents'];
   models: DashboardModel[];
   providers: DashboardProvider[];
+  subagents?: any[];
 }
 
 export interface ReplaceAssignmentRequest {
@@ -101,6 +102,7 @@ const normalizeEnabled = (skill: DashboardSkill) => skill.enabled ?? skill.activ
 
 export const buildUnifiedSkills = (
   claudeSkills: DashboardSkill[],
+  geminiSkills: DashboardSkill[],
   codexSkills: CodexInventory['skills']['items'],
   assignments: SkillAssignment[]
 ): UnifiedSkill[] => {
@@ -113,6 +115,22 @@ export const buildUnifiedSkills = (
       description: skill.description || 'No description available',
       source: 'claude' as const,
       origin: 'claude' as const,
+      category: skill.category || 'custom',
+      enabled: normalizeEnabled(skill),
+      file_path: skill.file_path,
+      assigned_targets: assignments.filter((assignment) => assignment.skill_key === skillKey),
+    };
+  });
+
+  const geminiUnified = geminiSkills.map((skill) => {
+    const skillKey = `gemini:${skill.id}`;
+    return {
+      skill_key: skillKey,
+      id: skill.id,
+      name: skill.name,
+      description: skill.description || 'No description available',
+      source: 'gemini' as const,
+      origin: 'gemini' as const,
       category: skill.category || 'custom',
       enabled: normalizeEnabled(skill),
       file_path: skill.file_path,
@@ -137,10 +155,10 @@ export const buildUnifiedSkills = (
     };
   });
 
-  return [...claudeUnified, ...codexUnified].sort((a, b) => a.name.localeCompare(b.name));
+  return [...claudeUnified, ...geminiUnified, ...codexUnified].sort((a, b) => a.name.localeCompare(b.name));
 };
 
-export const buildAITargets = ({ agents, codexAgents, models, providers }: BuildTargetInput): AITarget[] => {
+export const buildAITargets = ({ agents, codexAgents, models, providers, subagents }: BuildTargetInput): AITarget[] => {
   const claudeAgents = agents.filter(a => a.id !== 'antigravity');
   const antigravityAgents = agents.filter(a => a.id === 'antigravity');
 
@@ -169,6 +187,23 @@ export const buildAITargets = ({ agents, codexAgents, models, providers }: Build
       model: agent.model,
       active: agent.status === 'active',
       capabilities: agent.capabilities ? agent.capabilities.join(',') : 'reasoning,planning,tools-exec',
+    },
+  }));
+
+  const subagentTargets = (subagents || []).map((sub) => ({
+    target_key: `subagent:${sub.id}`,
+    id: sub.id,
+    name: sub.name,
+    type: 'subagent' as const,
+    provider: 'antigravity',
+    status: sub.status,
+    metadata: {
+      role: sub.role,
+      description: sub.description || '',
+      type: sub.type || 'static',
+      active: sub.status === 'active',
+      prompt: sub.prompt || '',
+      rules: sub.rules || '',
     },
   }));
 
@@ -212,7 +247,7 @@ export const buildAITargets = ({ agents, codexAgents, models, providers }: Build
     },
   }));
 
-  return [...claudeTargets, ...antigravityTargets, ...codexTargets, ...modelTargets, ...providerTargets];
+  return [...claudeTargets, ...antigravityTargets, ...subagentTargets, ...codexTargets, ...modelTargets, ...providerTargets];
 };
 
 export const replaceSkillAssignments = (

@@ -363,6 +363,12 @@ export const api = {
     return res.json();
   },
 
+  // Claude Code
+  getClaudeOverview: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/claude/overview`);
+    return res.json();
+  },
+
   // Antigravity
   getAntigravityOverview: async (): Promise<any> => {
     const res = await fetch(`${API_BASE}/antigravity/overview`);
@@ -370,6 +376,14 @@ export const api = {
   },
   getAntigravitySubagents: async (): Promise<any[]> => {
     const res = await fetch(`${API_BASE}/antigravity/subagents`);
+    return res.json();
+  },
+  updateAntigravitySubagent: async (id: string, subagent: { role?: string; description?: string; rules?: string }): Promise<any> => {
+    const res = await fetch(`${API_BASE}/antigravity/subagents/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(subagent),
+    });
     return res.json();
   },
 
