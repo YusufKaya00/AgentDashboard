@@ -1,3 +1,23 @@
+# Commands
+
+- **Run Dev Environment (Frontend & Backend)**: `npm run dev`
+- **Run Frontend Only**: `npx next dev`
+- **Run Backend Only**: `npm run dev --prefix backend-node`
+- **Build Frontend**: `npm run build`
+- **Lint Frontend**: `npm run lint`
+- **Run Backend Tests**: `npm run test --prefix backend-node`
+
+---
+
+# Multi-Agent Control Plane Support
+
+This project supports the orchestration of three major agent runtimes:
+1. **Antigravity Core**: Handles deep task reasoning, planning, and tool execution. Settings and logs are synced to `~/.gemini/antigravity/`.
+2. **Claude Code**: Anthropic's interactive agent harness. Integrated via `.claude/` local skills and configurations.
+3. **Codex Engine**: Specialized agent workspace management. Integrates with user/system/plugin inventories from `~/.codex/`.
+
+---
+
 # Workflow Orchestration
 
 ## 1. Plan Mode Default

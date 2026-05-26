@@ -1,58 +1,106 @@
-# Tnega Multi-Agent Control Plane & Dashboard
+# Tnega: Unified Multi-Agent Control Plane & Dashboard
 
-Tnega, AI ajanları (Antigravity Core, Claude Code, Codex Engine) ve diğer özel modeller için geliştirilmiş merkezi bir **Yönetim, İzleme ve Kontrol Paneli (Control Plane)** sistemidir.
+Tnega is a centralized **Management, Monitoring, and Control Plane** designed for orchestrating advanced AI agent runtimes—specifically **Antigravity Core**, **Claude Code** (Anthropic), and **Codex Engine**—alongside custom models and providers. 
 
----
-
-## 🚀 Öne Çıkan Özellikler
-
-- 🤖 **Merkezi Ajan Yönetimi** - Antigravity Core, Codex ve Claude Code ajanlarının konfigürasyonlarını, rollerini ve durumlarını tek merkezden izleyin ve düzenleyin.
-- 📂 **Global Konfigürasyon Depolama** - Tüm ajan ayarları, yetenekleri (skills) ve kontrol paneli verileri global olarak `~/.gemini/antigravity/` dizininde saklanır.
-- ⚡ **Otomatik Git ve Dosya Hook Motoru (New)** - Kod tabanınızdaki değişiklikleri otomatik inceleyen ajan tetikleyicileri.
-  - **Git Entegrasyonu**: Sunucu başladığında `.git/hooks/pre-commit` ve `.git/hooks/pre-push` dosyaları otomatik olarak kurulur.
-  - **Olay Tetikleyicileri (Triggers)**: `git.push` (Push öncesi), `git.commit` (Commit öncesi) ve `file.change` (Debounced dosya değişiklik izleme).
-  - **Ajan Bazlı Kod İnceleme**: Bir hook tetiklendiğinde `git diff` otomatik olarak alınır ve seçilen ajana (Antigravity, Claude Code veya Codex) inceleme komutu olarak gönderilir.
-- 📊 **Detaylı Sistem Sağlık & Kaynak Telemetrisi** - CPU, RAM kullanımı ve aktif ajan sayılarının anlık takibi.
-- 🔌 **Merkezi MCP Entegrasyonu** - Ajanların kullandığı araçları (MCP) yönetin ve diğer editörleriniz (Cursor, VS Code vb.) için ortak araç defteri olarak kullanın.
+It unifies disparate agent ecosystems into a single visual dashboard, providing real-time telemetry, a shared skill catalog, task execution monitoring, and an event-driven automation engine.
 
 ---
 
-## 🛠️ Kurulum ve Çalıştırma
+## ✨ Features
 
-### Backend (Node.js & Express)
+- 🤖 **Unified AI Control Plane**: Monitor, configure, and manage active agents, subagents, models, and providers (Gemini, Anthropic, Codex, OpenAI, local runners) in one unified interface.
+- 🔗 **Event-Driven Hook Engine**: 
+  - **Git Hook Integration**: Automatically installs `.git/hooks/pre-commit` and `.git/hooks/pre-push` hooks when the backend server boots.
+  - **Automated Workflows**: Define actions triggered by `git.push`, `git.commit`, or real-time `file.change` events.
+  - **Auto-Review Execution**: On trigger, Tnega captures the active `git diff` and forwards it to your agent of choice (Antigravity Core, Claude Code, or Codex Engine) with a customizable prompt (e.g., *"Perform a security audit"*).
+- 🎛️ **Unified Skill Catalog & Matrix**:
+  - Aggregates capabilities and skills across frameworks (Claude's settings, Codex system/plugin/user skills, Gemini skills).
+  - Map specific skills to specific targets (agents, subagents, models, or API providers) through an interactive matrix.
+- 📊 **Real-time System Telemetry & Health**: Monitor CPU load, RAM usage, storage states, active agent status, and event feeds in real-time via WebSockets.
+- 💻 **CLI Sessions & Terminal**: Manage and monitor active terminal sessions and command runs in the background.
+- 📂 **Global Configuration Store**: Centralizes configs at `~/.gemini/antigravity/` with automated data migration from local paths.
 
-Backend sunucusu Express ve WebSocket tabanlı çalışır. Terminal ve dosya izleme yeteneklerine sahiptir.
+---
 
+## 🛠️ Tech Stack
+
+- **Frontend**: Next.js 16 (App Router), React 19, Tailwind CSS 4, WebSockets.
+- **Backend**: Node.js, Express, TypeScript (`tsx`), Chokidar (file watching), WS.
+- **Persistence**: Local JSON/Markdown files located in `~/.gemini/antigravity/` and `.claude/`.
+
+---
+
+## 🚀 Quick Start
+
+You can run both the frontend dashboard and backend control plane concurrently from the project root.
+
+### 1. Prerequisites
+Ensure you have [Node.js](https://nodejs.org/) (v18+) and [Git](https://git-scm.com/) installed.
+
+### 2. Installation
+Clone the repository and install dependencies at the root:
 ```bash
-cd backend-node
 npm install
-npm run dev
 ```
 
-Sunucu varsayılan olarak `http://localhost:8000` portundan çalışır ve ilk açılışta `.git/hooks/` dizinine Tnega Hook tetikleyicilerini yerleştirir.
-
-### Frontend (Next.js)
-
+### 3. Run the Development Server
+Run the unified launch script:
 ```bash
-npm install
 npm run dev
 ```
-
-Dashboard arayüzü `http://localhost:3000` adresinden açılacaktır.
-
----
-
-## 🔗 Otomatik Hook Sistemi Nasıl Çalışır?
-
-1. **Hook Kaydı**: Dashboard üzerindeki **System Hooks** sekmesinden yeni bir hook oluşturun.
-2. **Parametreleri Belirleyin**:
-   - **Trigger Event**: Hangi olayda tetikleneceği (`git.push`, `git.commit` veya `file.change`).
-   - **Executor Agent**: Hangi ajanın çalışacağı (Antigravity Core, Claude Code, Codex veya Yok/Doğrudan Shell Komutu).
-   - **Action / Prompt**: Ajanın yapacağı inceleme talimatı (örn: *"Kod değişikliklerini güvenlik ve performans açısından denetle"*).
-3. **Otomatik Tetiklenme**: Terminalinizden `git commit` veya `git push` yaptığınızda ya da bir dosyayı değiştirdiğinizde, ilgili ajan arka planda `git diff` çıktısını alarak belirttiğiniz talimatla birlikte çalıştırılır ve inceleme sonuçları dashboard aktivite geçmişine canlı olarak yansıtılır.
+This command runs:
+- **Frontend Dashboard** on [http://localhost:3000](http://localhost:3000)
+- **Backend Control Plane** on [http://localhost:8000](http://localhost:8000)
 
 ---
 
-## 🛡️ Lisans
+## ⚙️ How the Hook Engine Works
 
-MIT
+```
+[Git Commit/Push] or [File Change]
+              │
+              ▼
+    Tnega Express Hook API ◄─── (Curls from .git/hooks)
+              │
+              ▼
+    Capture "git diff HEAD"
+              │
+              ▼
+   Build Agent Command (e.g., `claude -p "..."` or `antigravity "..."`)
+              │
+              ▼
+Execute Agent Background Process & Stream Results to Dashboard Activity Feed
+```
+
+1. **Create Hook**: Go to the **System Hooks** tab in the dashboard.
+2. **Configure Event**:
+   - **Trigger**: Select `git.commit`, `git.push`, or `file.change` (debounced file modifications).
+   - **Executor**: Select which AI agent (Antigravity Core, Claude Code, Codex, or raw Shell command) will run the action.
+   - **Action/Prompt**: Set the prompt for the agent (e.g., *"Analyze this code for security issues and performance bottlenecks."*).
+3. **Automatic Execution**: When you make a commit/push in your terminal, the Git hook curls the Tnega API. The backend retrieves the `git diff`, packages it with your prompt, runs the AI executor in the background, and streams stdout/stderr directly to the dashboard logs.
+
+---
+
+## 📁 Repository Structure
+
+```
+├── backend-node/         # Express & WebSocket Server (Control Plane)
+│   ├── lib/              # Unified Skills & Codex Inventory Helpers
+│   ├── server.ts         # Main Express API and Hook Engine
+│   └── package.json
+├── src/                  # Next.js 16 Frontend App
+│   ├── app/              # Router Pages & Layouts
+│   ├── components/       # Dashboard components (Terminal, SkillManager, etc.)
+│   ├── lib/              # API Client wrappers
+│   └── types/            # TypeScript interfaces
+├── .claude/              # Local skills, tasks and configs (migrated on boot)
+├── README.md             # This documentation
+├── CLAUDE.md             # Development guidelines for AI workers
+└── package.json          # Root scripts and workspace concurrent dependencies
+```
+
+---
+
+## 🛡️ License
+
+This project is licensed under the [MIT License](LICENSE).
