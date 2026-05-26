@@ -6,19 +6,30 @@ It unifies disparate agent ecosystems into a single visual dashboard, providing 
 
 ---
 
-## ✨ Features
+## ✨ Features & Capabilities
 
-- 🤖 **Unified AI Control Plane**: Monitor, configure, and manage active agents, subagents, models, and providers (Gemini, Anthropic, Codex, OpenAI, local runners) in one unified interface.
-- 🔗 **Event-Driven Hook Engine**: 
-  - **Git Hook Integration**: Automatically installs `.git/hooks/pre-commit` and `.git/hooks/pre-push` hooks when the backend server boots.
-  - **Automated Workflows**: Define actions triggered by `git.push`, `git.commit`, or real-time `file.change` events.
-  - **Auto-Review Execution**: On trigger, Tnega captures the active `git diff` and forwards it to your agent of choice (Antigravity Core, Claude Code, or Codex Engine) with a customizable prompt (e.g., *"Perform a security audit"*).
-- 🎛️ **Unified Skill Catalog & Matrix**:
-  - Aggregates capabilities and skills across frameworks (Claude's settings, Codex system/plugin/user skills, Gemini skills).
-  - Map specific skills to specific targets (agents, subagents, models, or API providers) through an interactive matrix.
-- 📊 **Real-time System Telemetry & Health**: Monitor CPU load, RAM usage, storage states, active agent status, and event feeds in real-time via WebSockets.
-- 💻 **CLI Sessions & Terminal**: Manage and monitor active terminal sessions and command runs in the background.
-- 📂 **Global Configuration Store**: Centralizes configs at `~/.gemini/antigravity/` with automated data migration from local paths.
+### 🤖 1. Multi-Agent & Subagent Observability
+* **Centralized Dashboard**: View, inspect, and monitor all your active AI runtimes in a single unified interface.
+* **Subagent Telemetry**: Real-time listing and tracking of all active subagents (both static and dynamically spawned) running across Antigravity, Claude, and Codex.
+* **Model & Provider Management**: Monitor, toggle, and manage active models (including Google Gemini, Anthropic Claude, OpenAI, and custom local models) and their API providers from a central control panel.
+
+### 🎛️ 2. Cross-Runtime Skill Assignment Matrix
+Tnega bridges the gap between different AI frameworks by normalizing capabilities into a unified catalog.
+* **Define Once, Run Anywhere**: Define a skill (capabilities, custom commands, or scripts) from any source—whether it's a Claude tool, a Codex system/user/plugin skill, or a Gemini capability.
+* **Flexible Assignment Matrix**: Map and assign those skills directly to any executor target:
+  - **Claude Agents & Subagents** (persisted in `.claude/`)
+  - **Codex Agents & Roles** (synced to the local `~/.codex/` directory path)
+  - **Antigravity Core Agents & Dynamic Subagents**
+  - **Specific Models & Providers** (assign capabilities directly to models/providers so any agent utilizing them inherits those skills)
+
+### 🔗 3. Event-Driven Hook Engine
+* **Git Hook Integration**: Automatically installs `.git/hooks/pre-commit` and `.git/hooks/pre-push` hooks when the backend server boots.
+* **Automated Review Workflows**: Setup automated tasks triggered on `git.push`, `git.commit`, or debounced `file.change` events.
+* **Auto-Review Execution**: On trigger, Tnega extracts the active `git diff` and passes it to your selected agent (Antigravity Core, Claude Code, or Codex Engine) with a customizable prompt (e.g., *"Audit changes for security, performance, and code quality"*), streaming output in real-time to the dashboard.
+
+### 📊 4. Telemetry, System Health & Background Tasks
+* **Resource Telemetry**: Monitor CPU load, RAM usage, storage states, active agent status, and event feeds in real-time via WebSockets.
+* **Background Tasks & CLI Sessions**: Start, monitor, kill, and interact with running shell/CLI tasks and background agent processes directly from the UI terminal.
 
 ---
 
@@ -54,6 +65,24 @@ This command runs:
 
 ---
 
+## ⚙️ How the Unified Skill Assignment Matrix Works
+
+```
+                        [Unified Skill Catalog]
+              (Claude Skills, Codex Skills, Gemini Skills)
+                                   │
+                                   ├───► Assign to: Claude Agent/Subagent (.claude/)
+                                   ├───► Assign to: Codex Agent/Role (~/.codex/)
+                                   ├───► Assign to: Antigravity Agent & Subagents
+                                   └───► Assign to: Custom Model or Provider
+```
+
+1. **Register/Sync Skills**: The backend automatically scans local `.claude/skills.json`, the user's Codex home (`~/.codex/skills/`, `~/.codex/plugins/`), and Gemini settings.
+2. **Assign via Matrix**: Using the **Skills** matrix tab on the dashboard, select any skill and bind it to one or more targets (e.g., assign a Codex refactoring skill to a Claude subagent, or an Antigravity code search skill to a Codex primary agent).
+3. **Metadata Synchronization**: Tnega saves these cross-runtime assignments in `.claude/data/skill_assignments.json`. Runtimes automatically read this assignment metadata on execution to resolve dynamic skills.
+
+---
+
 ## ⚙️ How the Hook Engine Works
 
 ```
@@ -77,7 +106,7 @@ Execute Agent Background Process & Stream Results to Dashboard Activity Feed
    - **Trigger**: Select `git.commit`, `git.push`, or `file.change` (debounced file modifications).
    - **Executor**: Select which AI agent (Antigravity Core, Claude Code, Codex, or raw Shell command) will run the action.
    - **Action/Prompt**: Set the prompt for the agent (e.g., *"Analyze this code for security issues and performance bottlenecks."*).
-3. **Automatic Execution**: When you make a commit/push in your terminal, the Git hook curls the Tnega API. The backend retrieves the `git diff`, packages it with your prompt, runs the AI executor in the background, and streams stdout/stderr directly to the dashboard logs.
+3. **Automatic Execution**: When you commit/push code in your terminal, the Git hook curls the Tnega API. The backend retrieves the `git diff`, packages it with your prompt, runs the AI executor in the background, and streams stdout/stderr directly to the dashboard logs.
 
 ---
 
