@@ -15,6 +15,8 @@ import {
   buildUnifiedSkills,
   replaceSkillAssignments,
   type SkillAssignment,
+  type TargetType,
+  type SkillSource,
 } from './lib/aiControlPlane.js';
 
 import 'dotenv/config';
@@ -95,6 +97,160 @@ const SKILLS_FILE = path.join(CLAUDE_DIR, 'skills.json');
 const ACTIVITIES_FILE = path.join(DATA_DIR, 'activities.json');
 const SKILL_ASSIGNMENTS_FILE = path.join(DATA_DIR, 'skill_assignments.json');
 const HOOK_HISTORY_FILE = path.join(DATA_DIR, 'hook_history.json');
+
+// ============ MULTI-RUNTIME AGENTS HELPERS ============
+const getAgentPaths = (runtime: string, id: string) => {
+  if (runtime === 'claude') {
+    return {
+      metadataFile: path.join(ROOT_DIR, '.claude', 'agents.json'),
+      promptFile: path.join(ROOT_DIR, '.claude', 'agents', `${id}.md`),
+      dir: path.join(ROOT_DIR, '.claude', 'agents')
+    };
+  } else if (runtime === 'codex') {
+    const codexHome = path.join(os.homedir(), '.codex');
+    return {
+      metadataFile: path.join(codexHome, 'agents.json'),
+      promptFile: path.join(codexHome, 'agents', `${id}.md`),
+      dir: path.join(codexHome, 'agents')
+    };
+  } else {
+    // Default to antigravity
+    return {
+      metadataFile: AGENTS_METADATA_FILE,
+      promptFile: path.join(AGENTS_DIR, `${id}.md`),
+      dir: AGENTS_DIR
+    };
+  }
+};
+
+const determineRuntime = (model: string): string => {
+  const m = (model || '').toLowerCase();
+  if (m.startsWith('claude:') || m.includes('claude') || m.includes('anthropic')) {
+    return 'claude';
+  } else if (m.startsWith('codex:') || m.includes('codex')) {
+    return 'codex';
+  } else {
+    return 'antigravity';
+  }
+};
+
+const loadAllAgents = async () => {
+  const localClaudeAgentsFile = path.join(ROOT_DIR, '.claude', 'agents.json');
+  const codexAgentsFile = path.join(os.homedir(), '.codex', 'agents.json');
+
+  const [antigravityAgents, claudeAgents, codexAgents] = await Promise.all([
+    readJson(AGENTS_METADATA_FILE, []),
+    readJson(localClaudeAgentsFile, []),
+    readJson(codexAgentsFile, [])
+  ]);
+
+  const tag = (list: any[], runtime: string) => {
+    return (Array.isArray(list) ? list : []).map((agent: any) => ({
+      ...agent,
+      runtime: agent.runtime || runtime
+    }));
+  };
+
+  return [
+    ...tag(antigravityAgents, 'antigravity'),
+    ...tag(claudeAgents, 'claude'),
+    ...tag(codexAgents, 'codex')
+  ];
+};
+
+const saveAgentToRuntime = async (runtime: string, agent: any, promptText?: string) => {
+  const paths = getAgentPaths(runtime, agent.id);
+  await fs.ensureDir(path.dirname(paths.metadataFile));
+  if (paths.dir) {
+    await fs.ensureDir(paths.dir);
+  }
+
+  // Load existing agents in this runtime
+  const agents = await readJson(paths.metadataFile, []);
+  const idx = agents.findIndex((a: any) => a.id === agent.id);
+
+  const cleanAgent = { ...agent, runtime };
+
+  // Delete fields that shouldn't be in metadata file
+  delete cleanAgent.system_prompt;
+  delete cleanAgent.skills;
+
+  if (idx === -1) {
+    agents.push(cleanAgent);
+  } else {
+    agents[idx] = cleanAgent;
+  }
+
+  await writeJson(paths.metadataFile, agents);
+
+  if (promptText !== undefined) {
+    await fs.writeFile(paths.promptFile, promptText, 'utf-8');
+  }
+};
+
+const deleteAgentFromRuntime = async (runtime: string, id: string) => {
+  const paths = getAgentPaths(runtime, id);
+  if (await fs.pathExists(paths.metadataFile)) {
+    let agents = await readJson(paths.metadataFile, []);
+    agents = agents.filter((a: any) => a.id !== id);
+    await writeJson(paths.metadataFile, agents);
+  }
+  if (await fs.pathExists(paths.promptFile)) {
+    await fs.remove(paths.promptFile);
+  }
+};
+
+const getAgentPromptFromRuntime = async (runtime: string, id: string) => {
+  const paths = getAgentPaths(runtime, id);
+  if (await fs.pathExists(paths.promptFile)) {
+    return await fs.readFile(paths.promptFile, 'utf-8');
+  }
+  return '';
+};
+
+const updateAgentSkills = async (agentId: string, runtime: string, skillKeys: string[]) => {
+  const existing = await readJson(SKILL_ASSIGNMENTS_FILE, []);
+  
+  // Clean target keys for this agent
+  const agentTargetKeys = [`claude_agent:${agentId}`, `antigravity_agent:${agentId}`, `codex_agent:${agentId}`];
+  
+  // Filter out existing assignments for this agent
+  let nextAssignments = (Array.isArray(existing) ? existing : [])
+    .filter((a: any) => !agentTargetKeys.includes(a.target_key));
+    
+  // Add new assignments
+  const now = new Date().toISOString();
+  for (const skillKey of skillKeys) {
+    const [skillSource, ...idParts] = skillKey.split(':');
+    const skillId = idParts.join(':');
+    
+    // Choose correct target key for the current agent and runtime
+    let targetKey = `antigravity_agent:${agentId}`;
+    let targetType: TargetType = 'antigravity_agent';
+    if (runtime === 'claude') {
+      targetKey = `claude_agent:${agentId}`;
+      targetType = 'claude_agent';
+    } else if (runtime === 'codex') {
+      targetKey = `codex_agent:${agentId}`;
+      targetType = 'codex_agent';
+    }
+    
+    nextAssignments.push({
+      skill_key: skillKey,
+      skill_id: skillId,
+      skill_source: skillSource as any,
+      target_key: targetKey,
+      target_type: targetType,
+      target_id: agentId,
+      created_at: now,
+      updated_at: now
+    });
+  }
+  
+  await writeJson(SKILL_ASSIGNMENTS_FILE, nextAssignments);
+  await syncAgentCapabilities(nextAssignments);
+};
+
 
 // ============ HELPERS ============
 const broadcast = (data: any) => {
@@ -228,7 +384,7 @@ const normalizeSkill = (skill: any) => {
 const getAIControlPlaneOverview = async () => {
   const localSkillsFile = path.join(ROOT_DIR, '.claude', 'skills.json');
   const [agents, geminiSkills, localClaudeSkills, models, providers, assignments, codexInventory, subagents] = await Promise.all([
-    readJson(AGENTS_METADATA_FILE, []),
+    loadAllAgents(),
     readJson(SKILLS_FILE, []),
     readJson(localSkillsFile, []),
     getMergedModels(),
@@ -444,12 +600,130 @@ app.get('/api/system/status', async (_req, res) => {
 // ============ AGENTS ============
 const AGENTS_METADATA_FILE = path.join(DATA_DIR, 'agents.json');
 
+// Ensure global skills.json exists and has our new skills
+const initGlobalSkills = async () => {
+  await fs.ensureDir(CLAUDE_DIR);
+  // Ensure default models.json etc if not exists
+  const localSkillsFile = path.join(ROOT_DIR, '.claude', 'skills.json');
+  if (fs.existsSync(localSkillsFile) && !fs.existsSync(SKILLS_FILE)) {
+    fs.copySync(localSkillsFile, SKILLS_FILE);
+  }
+
+  // Load global skills
+  const skills = await readJson(SKILLS_FILE, []);
+  let changed = false;
+
+  const googleSearchSkill = {
+    id: "google-search",
+    name: "Google Search",
+    description: "Search the web for information using Google Search.",
+    category: "search",
+    enabled: true,
+    active: true,
+    created_at: "2026-05-31T17:23:47Z"
+  };
+
+  const urlContextSkill = {
+    id: "url-context",
+    name: "URL Context",
+    description: "Fetch content from specified web URLs.",
+    category: "search",
+    enabled: true,
+    active: true,
+    created_at: "2026-05-31T17:23:47Z"
+  };
+
+  if (!skills.find((s: any) => s.id === 'google-search')) {
+    skills.push(googleSearchSkill);
+    changed = true;
+  }
+  if (!skills.find((s: any) => s.id === 'url-context')) {
+    skills.push(urlContextSkill);
+    changed = true;
+  }
+
+  if (changed) {
+    await writeJson(SKILLS_FILE, skills);
+    console.log('[Self-Healing] Registered new skills in global skills.json');
+  }
+};
+
 // Initialize agents.json from .md files if needed
 const initAgents = async () => {
+  await initGlobalSkills();
+
   const agents = await readJson(AGENTS_METADATA_FILE, []);
   const agentFiles = (await fs.readdir(AGENTS_DIR).catch(() => [])).filter((f: string) => f.endsWith('.md'));
   
   let changed = false;
+
+  // First, check if First Agent is present
+  if (!agents.find((a: any) => a.id === 'first-agent')) {
+    const firstAgentMetadata = {
+      id: "first-agent",
+      name: "First Agent",
+      description: "Enterprise-grade DevOps Architect and Principal Software Engineer designed for high-level system design, rigorous brainstorming, and production-ready code generation. This agent acts as a critical technical advisor that does not just generate answers, but actively analyzes trade-offs, evaluates infrastructure costs, uncovers hidden security risks, and refactors code according to strict industry standards. Optimized for automating SDLC pipelines, writing robust Infrastructure as Code (Terraform/OpenTofu), configuring Kubernetes clusters, and architecting scalable backend/frontend applications (TypeScript, Python, PHP). It enforces the Principle of Least Privilege (PoLP), avoids placeholders or \"TODO\" shortcuts, and structure complex technical dialogues through multi-phase engineering workflows. Ideal for senior developers, CTOs, and DevOps leads requiring a deeply analytical, cynical, and highly practical peer-review partner.",
+      model: "antigravity:gemini-2.5-pro",
+      status: "active",
+      role: "agent",
+      capabilities: ["Google Search", "URL Context"],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      config: {}
+    };
+
+    agents.push(firstAgentMetadata);
+    changed = true;
+
+    // Create prompt file
+    const promptContent = `# SYSTEM INSTRUCTIONS: PRINCIPAL DEVOPS & SOFTWARE ENGINEERING AGENT\n\n## 1. IDENTITY & PROFESSIONAL STANDARDS\n- You are a cynical, highly analytical Principal DevOps Architect and Elite Full-Stack Software Engineer. \n- Your primary objective is to deliver production-ready infrastructure designs, high-performance code, and deep architectural brainstorming.\n- You absolutely do not praise the user or use clichéd, generic AI filler sentences (e.g., "Sure, I can help with that!", "Great job on this setup"). You dive straight into the technical evaluation.\n- You must prioritize real-world applicability, performance under heavy load, cost efficiency, and security over purely theoretical or naive solutions.\n\n## 2. THE BRAINSTORMING & CRITICAL EVALUATION PROTOCOL\nWhen the user asks for advice, presents an architectural draft, or requests a strategy for a technical problem, you MUST NOT jump directly to the final solution. Instead, execute the following multi-phase cognitive workflow:\n\n### Phase 1: Requirement Analysis & Deconstruction\n- Identify the explicit constraints (budget, timeline, current tech stack).\n- Identify implicit constraints or hidden complexities (network latency, state management, single points of failure, data compliance).\n- If the user's premise is flawed or based on incorrect assumptions, point it out immediately and rigorously. Do not build on top of bad design.\n\n### Phase 2: Architectural Trade-Off Matrix\n- Compare at least two or three competing methodologies or tools (e.g., AWS ECS Fargate vs. EKS, Self-hosted Kafka vs. Managed AWS MSK, Monolith vs. Microservices).\n- Evaluate them using a clean Markdown table across these vectors: Cost, Operational Complexity, Scalability, and Security.\n\n### Phase 3: The Recommendation & Rationalization\n- Explicitly state which path is objectively the best for the user's scenario.\n- Provide a clear, metrics-driven defense for your choice.\n\n### Phase 4: Implementation Blueprint\n- Provide the exact architecture diagrams (represented via clean text or structured bullet points), code, config files, or pipeline scripts needed to realize the solution.\n\n## 3. CODE GENERATION & SOFTWARE ENGINEERING RULES\n- Zero Placeholders: You are strictly forbidden from writing code snippets that contain "// TODO", "// Implement later", or assuming parts of the logic. Every function, loop, catch block, and module import must be written out completely.\n- Production-Ready: All code must include comprehensive error handling, input validation, logging mechanisms, and type safety (if applicable).\n- Technical Stack Proficiency: You write expert-level code in TypeScript/JavaScript (Next.js, Node.js), Python (FastAPI, scripting), PHP (Laravel, modern OOP), and native Bash.\n- Clean Code Standards: Adhere to SOLID principles, DRY (Don't Repeat Yourself), and write highly modular, testable components.\n\n## 4. DEVOPS & INFRASTRUCTURE AS CODE (IaC) MANDATES\n- Infrastructure as Code: All infrastructure solutions must be represented as clean, declarative code—preferring Terraform/OpenTofu or Kubernetes manifests. No manual UI clicking steps.\n- Security-First (PoLP): Every IAM policy, security group, or Kubernetes Role/ClusterRole must follow the Principle of Least Privilege. Never use wildcards ("*") for resource actions unless absolutely unavoidable.\n- Containerization & Orchestration: Multi-stage Dockerfiles are mandatory to optimize layer caching and minimize final image sizes. Kubernetes resources must include defined resource limits and requests (CPU/Memory), liveness/readiness probes, and proper network policies.\n- CI/CD Pipelines: When building pipelines (GitHub Actions, GitLab CI), focus on parallelism, matrix builds, caching strategies (node_modules, docker layers), and secure secret injection.\n\n## 5. RESPONSE FORMATTING ARCHITECTURE\n- Use markdown headings (##, ###) to maintain a strict, scannable technical hierarchy.\n- Use explicit language tags on all code blocks (e.g., \`\`\`terraform, \n\`\`\`typescript, \`\`\`yaml).\n- Use blockquotes (>) to highlight mission-critical security warnings, breaking changes, or deployment gotchas.\n- Keep language dense, precise, and professional. Use exact industry terminology (e.g., "idempotency", "ephemeral storage", "horizontal pod autoscaling", "blue-green deployment").`;
+
+    await fs.ensureDir(AGENTS_DIR);
+    await fs.writeFile(path.join(AGENTS_DIR, 'first-agent.md'), promptContent, 'utf-8');
+
+    // Set up skills assignments in skill_assignments.json
+    try {
+      const assignments = await readJson(SKILL_ASSIGNMENTS_FILE, []);
+      const now = new Date().toISOString();
+      const firstAgentSkillAssignments = [
+        {
+          skill_key: "gemini:google-search",
+          skill_id: "google-search",
+          skill_source: "gemini",
+          target_key: "antigravity_agent:first-agent",
+          target_type: "antigravity_agent",
+          target_id: "first-agent",
+          created_at: now,
+          updated_at: now
+        },
+        {
+          skill_key: "gemini:url-context",
+          skill_id: "url-context",
+          skill_source: "gemini",
+          target_key: "antigravity_agent:first-agent",
+          target_type: "antigravity_agent",
+          target_id: "first-agent",
+          created_at: now,
+          updated_at: now
+        }
+      ];
+
+      let assignmentsChanged = false;
+      for (const assign of firstAgentSkillAssignments) {
+        if (!assignments.find((a: any) => a.skill_key === assign.skill_key && a.target_key === assign.target_key)) {
+          assignments.push(assign);
+          assignmentsChanged = true;
+        }
+      }
+
+      if (assignmentsChanged) {
+        await writeJson(SKILL_ASSIGNMENTS_FILE, assignments);
+      }
+    } catch (e) {
+      console.error('[Self-Healing] Failed to setup assignments for First Agent:', e);
+    }
+  }
+
   for (const f of agentFiles) {
     const id = f.replace('.md', '');
     if (!agents.find((a: any) => a.id === id)) {
@@ -551,22 +825,22 @@ app.get('/api/agents/summary', async (_req, res) => {
 });
 
 app.get('/api/agents', async (_req, res) => {
-  const agents = await readJson(AGENTS_METADATA_FILE, []);
+  const agents = await loadAllAgents();
   res.json(agents.filter((a: any) => a.id !== 'antigravity'));
 });
 
 app.get('/api/agents/:id', async (req, res) => {
-  const agents = await readJson(AGENTS_METADATA_FILE, []);
+  const agents = await loadAllAgents();
   const agent = agents.find((a: any) => a.id === req.params.id);
   if (!agent) return res.status(404).json({ error: 'Agent not found' });
   res.json(agent);
 });
 
 app.post('/api/agents', async (req, res) => {
-  const { name, prompt, model, description, capabilities, role } = req.body;
+  const { name, prompt, model, description, capabilities, role, skills } = req.body;
   const id = req.body.id || name.toLowerCase().replace(/\s+/g, '-');
+  const runtime = determineRuntime(model);
   
-  const agents = await readJson(AGENTS_METADATA_FILE, []);
   const newAgent = {
     id,
     name,
@@ -580,84 +854,86 @@ app.post('/api/agents', async (req, res) => {
     config: req.body.config || {}
   };
   
-  agents.push(newAgent);
-  await writeJson(AGENTS_METADATA_FILE, agents);
+  await saveAgentToRuntime(runtime, newAgent, prompt || `# ${name}\n\nAgent prompt.`);
   
-  // Also save the prompt file
-  await fs.writeFile(path.join(AGENTS_DIR, `${id}.md`), prompt || `# ${name}\n\nAgent prompt.`, 'utf-8');
+  if (Array.isArray(skills)) {
+    await updateAgentSkills(id, runtime, skills);
+  }
   
-  logActivity('agent', `Agent created: ${name}`, id);
-  res.json(newAgent);
+  logActivity('agent', `Agent created: ${name} (${runtime})`, id);
+  res.json({ ...newAgent, runtime });
 });
 
 app.put('/api/agents/:id', async (req, res) => {
-  const agents = await readJson(AGENTS_METADATA_FILE, []);
-  const idx = agents.findIndex((a: any) => a.id === req.params.id);
+  const agents = await loadAllAgents();
+  const existingAgent = agents.find((a: any) => a.id === req.params.id);
   
-  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+  if (!existingAgent) return res.status(404).json({ error: 'Not found' });
+  
+  const runtime = determineRuntime(req.body.model || existingAgent.model);
   
   const updatedAgent = {
-    ...agents[idx],
+    ...existingAgent,
     ...req.body,
-    id: req.params.id, // Ensure ID doesn't change
+    id: req.params.id,
     updated_at: new Date().toISOString()
   };
   
-  // Don't save prompt in json metadata
-  const { system_prompt, ...metadataOnly } = updatedAgent;
-  agents[idx] = metadataOnly;
-  
-  await writeJson(AGENTS_METADATA_FILE, agents);
-  
-  // Save prompt file if provided
-  if (req.body.system_prompt) {
-    await fs.writeFile(path.join(AGENTS_DIR, `${req.params.id}.md`), req.body.system_prompt, 'utf-8');
+  // If runtime changed, clean from old runtime
+  if (existingAgent.runtime && existingAgent.runtime !== runtime) {
+    await deleteAgentFromRuntime(existingAgent.runtime, req.params.id);
   }
   
-  logActivity('agent', `Agent updated: ${req.params.id}`, req.params.id);
-  res.json(agents[idx]);
+  await saveAgentToRuntime(runtime, updatedAgent, req.body.system_prompt);
+  
+  if (Array.isArray(req.body.skills)) {
+    await updateAgentSkills(req.params.id, runtime, req.body.skills);
+  }
+  
+  logActivity('agent', `Agent updated: ${req.params.id} (${runtime})`, req.params.id);
+  res.json({ ...updatedAgent, runtime });
 });
 
 app.post('/api/agents/:id/activate', async (req, res) => {
-  const agents = await readJson(AGENTS_METADATA_FILE, []);
+  const agents = await loadAllAgents();
   const agent = agents.find((a: any) => a.id === req.params.id);
   if (!agent) return res.status(404).json({ error: 'Not found' });
 
   agent.status = 'active';
   agent.updated_at = new Date().toISOString();
-  await writeJson(AGENTS_METADATA_FILE, agents);
+  await saveAgentToRuntime(agent.runtime || 'antigravity', agent);
   logActivity('agent', `Agent activated: ${req.params.id}`, req.params.id);
   res.json(agent);
 });
 
 app.post('/api/agents/:id/deactivate', async (req, res) => {
-  const agents = await readJson(AGENTS_METADATA_FILE, []);
+  const agents = await loadAllAgents();
   const agent = agents.find((a: any) => a.id === req.params.id);
   if (!agent) return res.status(404).json({ error: 'Not found' });
 
   agent.status = 'inactive';
   agent.updated_at = new Date().toISOString();
-  await writeJson(AGENTS_METADATA_FILE, agents);
+  await saveAgentToRuntime(agent.runtime || 'antigravity', agent);
   logActivity('agent', `Agent deactivated: ${req.params.id}`, req.params.id);
   res.json(agent);
 });
 
 app.delete('/api/agents/:id', async (req, res) => {
-  let agents = await readJson(AGENTS_METADATA_FILE, []);
-  agents = agents.filter((a: any) => a.id !== req.params.id);
-  await writeJson(AGENTS_METADATA_FILE, agents);
-  
-  const fp = path.join(AGENTS_DIR, `${req.params.id}.md`);
-  if (await fs.pathExists(fp)) await fs.remove(fp);
-  
+  const agents = await loadAllAgents();
+  const agent = agents.find((a: any) => a.id === req.params.id);
+  if (!agent) return res.status(404).json({ error: 'Not found' });
+
+  await deleteAgentFromRuntime(agent.runtime || 'antigravity', req.params.id);
   logActivity('agent', `Agent deleted: ${req.params.id}`, req.params.id);
   res.json({ success: true });
 });
 
 app.get('/api/agents/:id/prompt', async (req, res) => {
-  const fp = path.join(AGENTS_DIR, `${req.params.id}.md`);
-  if (!await fs.pathExists(fp)) return res.status(404).json({ error: 'Not found' });
-  res.json({ prompt: await fs.readFile(fp, 'utf-8') });
+  const agents = await loadAllAgents();
+  const agent = agents.find((a: any) => a.id === req.params.id);
+  if (!agent) return res.status(404).json({ error: 'Agent not found' });
+  const prompt = await getAgentPromptFromRuntime(agent.runtime || 'antigravity', req.params.id);
+  res.json({ prompt });
 });
 
 // ============ MODELS CRUD ============
@@ -1298,7 +1574,7 @@ const syncAgentCapabilities = async (assignments: any[]) => {
   try {
     const [skills, agents] = await Promise.all([
       readJson(SKILLS_FILE, []),
-      readJson(AGENTS_METADATA_FILE, [])
+      loadAllAgents()
     ]);
 
     // Get Codex inventory for Codex skills
@@ -1311,7 +1587,7 @@ const syncAgentCapabilities = async (assignments: any[]) => {
 
     let changed = false;
     for (const agent of agents) {
-      const agentTargetKeys = [`claude_agent:${agent.id}`, `antigravity_agent:${agent.id}`];
+      const agentTargetKeys = [`claude_agent:${agent.id}`, `antigravity_agent:${agent.id}`, `codex_agent:${agent.id}`];
       const agentAssignments = assignments.filter((a: any) => agentTargetKeys.includes(a.target_key));
       
       const assignedSkillNames: string[] = [];
@@ -1346,9 +1622,11 @@ const syncAgentCapabilities = async (assignments: any[]) => {
         changed = true;
       }
 
-      // Sync skills to persona markdown file under ~/.gemini/antigravity/agents/*.md
+      // Sync skills to persona markdown file under agent paths
       try {
-        const agentMdPath = path.join(AGENTS_DIR, `${agent.id}.md`);
+        const agentPaths = getAgentPaths(agent.runtime || 'antigravity', agent.id);
+        const agentMdPath = agentPaths.promptFile;
+        
         if (await fs.pathExists(agentMdPath)) {
           let content = await fs.readFile(agentMdPath, 'utf-8');
           const startMarker = '<!-- DASHBOARD_SKILLS_START -->';
@@ -1384,8 +1662,18 @@ const syncAgentCapabilities = async (assignments: any[]) => {
     }
     
     if (changed) {
-      await writeJson(AGENTS_METADATA_FILE, agents);
-      console.log('[Capabilities Sync] Successfully updated agents.json capabilities.');
+      const antigravityGroup = agents.filter((a: any) => a.runtime === 'antigravity');
+      const claudeGroup = agents.filter((a: any) => a.runtime === 'claude');
+      const codexGroup = agents.filter((a: any) => a.runtime === 'codex');
+
+      const stripRuntime = (list: any[]) => list.map(({ runtime, ...rest }) => rest);
+
+      await Promise.all([
+        writeJson(AGENTS_METADATA_FILE, stripRuntime(antigravityGroup)),
+        writeJson(path.join(ROOT_DIR, '.claude', 'agents.json'), stripRuntime(claudeGroup)),
+        writeJson(path.join(os.homedir(), '.codex', 'agents.json'), stripRuntime(codexGroup))
+      ]);
+      console.log('[Capabilities Sync] Successfully updated all metadata files.');
     }
 
     // Export skills assigned to Codex targets

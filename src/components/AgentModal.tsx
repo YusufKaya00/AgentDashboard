@@ -26,6 +26,7 @@ export default function AgentModal({ agent, onSave, onClose }: AgentModalProps) 
   const [models, setModels] = useState<any[]>([]);
   const [overview, setOverview] = useState<AIControlPlaneOverview | null>(null);
   const [loadingPrompt, setLoadingPrompt] = useState(false);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
 
   useEffect(() => {
     api.getModels().then(setModels);
@@ -46,19 +47,26 @@ export default function AgentModal({ agent, onSave, onClose }: AgentModalProps) 
     }
   }, [agent]);
 
+  useEffect(() => {
+    if (overview && agent?.id) {
+      const agentTargetKeys = [`claude_agent:${agent.id}`, `antigravity_agent:${agent.id}`, `codex_agent:${agent.id}`];
+      const initialSkills = overview.skills
+        .filter(s => s.assigned_targets.some(t => agentTargetKeys.includes(t.target_key)))
+        .map(s => s.skill_key);
+      setSelectedSkills(initialSkills);
+    }
+  }, [overview, agent]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave({
       ...formData,
+      skills: selectedSkills,
       id: formData.id || crypto.randomUUID(),
       created_at: agent?.created_at || new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    } as unknown as Agent);
+    } as Agent);
   };
-
-  const assignedSkills = overview?.skills.filter(s => 
-    s.assigned_targets.some(t => t.target_key === `claude_agent:${formData.id}`)
-  ) || [];
 
   return (
     <div className="modal-overlay">
@@ -116,19 +124,44 @@ export default function AgentModal({ agent, onSave, onClose }: AgentModalProps) 
 
             <div className="space-y-2">
               <label className="block text-[10px] font-black text-muted uppercase tracking-widest ml-1">
-                Assigned AI Skills (Control Plane)
+                Equipped Agent Skills / Tools
               </label>
-              <div className="p-3 bg-background border border-border rounded-xl">
-                {assignedSkills.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {assignedSkills.map(skill => (
-                      <span key={skill.skill_key} className="px-2 py-1 bg-primary/10 text-primary border border-primary/20 rounded-md text-[10px] font-bold">
-                        {skill.name}
-                      </span>
-                    ))}
+              <div className="p-4 bg-background/50 border border-border rounded-xl max-h-[200px] overflow-y-auto custom-scrollbar">
+                {overview?.skills && overview.skills.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {overview.skills.map((skill) => {
+                      const isChecked = selectedSkills.includes(skill.skill_key);
+                      return (
+                        <label
+                          key={skill.skill_key}
+                          className={`flex items-start gap-2.5 p-2 rounded-lg border transition-all cursor-pointer select-none ${
+                            isChecked
+                              ? 'bg-primary/10 border-primary/40 text-white'
+                              : 'bg-surface/30 border-transparent text-muted hover:bg-surface/50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              setSelectedSkills(prev =>
+                                prev.includes(skill.skill_key)
+                                  ? prev.filter(k => k !== skill.skill_key)
+                                  : [...prev, skill.skill_key]
+                              );
+                            }}
+                            className="mt-0.5 w-3.5 h-3.5 accent-[var(--primary)] cursor-pointer"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold truncate leading-none text-white/90">{skill.name}</div>
+                            <div className="text-[9px] text-muted truncate mt-1 leading-tight">{skill.description}</div>
+                          </div>
+                        </label>
+                      );
+                    })}
                   </div>
                 ) : (
-                  <p className="text-xs text-muted">No skills assigned. Manage assignments in the AI Skill Control Plane.</p>
+                  <p className="text-xs text-muted">No skills available in catalog.</p>
                 )}
               </div>
             </div>

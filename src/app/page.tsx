@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -21,7 +22,19 @@ import CodexControlPanel from '@/components/CodexControlPanel';
 import AntigravityControlPanel from '@/components/AntigravityControlPanel';
 import ClaudeControlPanel from '@/components/ClaudeControlPanel';
 
-type DashboardTab = 'dashboard' | 'agents' | 'antigravity' | 'skills' | 'clisessions' | 'codex' | 'terminal' | 'tasks' | 'activity' | 'system' | 'hooks' | 'analytics' | 'models';
+const PageHeader = ({ title, subtitle, accent = "Intelligence" }: { title: string, subtitle: string, accent?: string }) => (
+  <div className="mb-8">
+    <div className="flex items-center gap-2 mb-1">
+      <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+      <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">System {accent}</span>
+    </div>
+    <h1 className="text-3xl font-black text-white tracking-tight">
+      {title} <span className="text-muted font-light">{subtitle}</span>
+    </h1>
+  </div>
+);
+
+type DashboardTab = 'dashboard' | 'agents' | 'claude' | 'antigravity' | 'skills' | 'clisessions' | 'codex' | 'terminal' | 'tasks' | 'activity' | 'system' | 'hooks' | 'analytics' | 'models';
 
 export default function Home() {
   const [stats, setStats] = useState<Stats | null>(null);
@@ -31,20 +44,7 @@ export default function Home() {
   const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [activeTab, setActiveTab] = useState<DashboardTab>('dashboard');
 
-  useEffect(() => {
-    loadInitialData();
-
-    const ws = connectWebSocket((data) => {
-      if (data.type === 'activity') {
-        setActivities((prev) => [data.data, ...prev].slice(0, 100));
-        loadStats();
-      }
-    });
-
-    return () => ws.close();
-  }, []);
-
-  const mapTargetsToAgents = (targets: AITarget[]): Agent[] => {
+  const mapTargetsToAgents = (targets: AITarget[], assignments: any[] = []): Agent[] => {
     return targets
       .filter(t => t.type === 'claude_agent' || t.type === 'antigravity_agent' || t.type === 'codex_agent' || t.type === 'subagent')
       .map(t => ({
@@ -53,7 +53,7 @@ export default function Home() {
         description: (t.metadata.description as string) || (t.metadata.role as string) || (t.type === 'antigravity_agent' ? 'Autonomous Core Agent' : 'Sub-Agent Node'),
         model: (t.metadata.model as string) || (t.type === 'codex_agent' ? 'Codex Engine' : 'N/A'),
         status: t.status === 'active' || t.status === 'Online' || t.type === 'codex_agent' ? 'active' : (t.status === 'error' ? 'error' : 'inactive'),
-        config: { type: t.type },
+        config: { type: t.type, target_key: t.target_key },
         created_at: '',
         updated_at: '',
         role: t.type === 'antigravity_agent' ? 'team_lead' : (t.type === 'codex_agent' ? 'specialist' : 'worker'),
@@ -61,21 +61,26 @@ export default function Home() {
           ? (t.metadata.capabilities as string).split(',').filter(Boolean)
           : (t.type === 'antigravity_agent' 
              ? ['reasoning', 'planning', 'tools-exec'] 
-             : (t.type === 'codex_agent' ? ['codex-task', 'code-generation'] : ['chat', 'tool-call']))
+             : (t.type === 'codex_agent' ? ['codex-task', 'code-generation'] : ['chat', 'tool-call'])),
+        runtime: t.provider || (t.type === 'claude_agent' ? 'claude' : t.type === 'codex_agent' ? 'codex' : 'antigravity'),
+        skills: assignments
+          .filter((a: any) => a.target_key === t.target_key)
+          .map((a: any) => a.skill_key)
       }));
   };
 
   const loadInitialData = async () => {
     try {
-      const [statsData, targetsData, hooksData, modelsData, activitiesData] = await Promise.all([
+      const [statsData, targetsData, hooksData, modelsData, activitiesData, assignmentsData] = await Promise.all([
         api.getStats(),
         api.getAITargets(),
         api.getHooks(),
         api.getModels(),
         api.getActivity(50),
+        api.getSkillAssignments().catch(() => []),
       ]);
       setStats(statsData);
-      setAgents(mapTargetsToAgents(targetsData));
+      setAgents(mapTargetsToAgents(targetsData, assignmentsData));
       setHooks(Array.isArray(hooksData) ? hooksData : []);
       setModels(Array.isArray(modelsData) ? modelsData : []);
       setActivities(Array.isArray(activitiesData) ? activitiesData : []);
@@ -93,10 +98,30 @@ export default function Home() {
     }
   };
 
+  useEffect(() => {
+    loadInitialData();
+
+    const ws = connectWebSocket((data) => {
+      if (data.type === 'activity') {
+        setActivities((prev) => [data.data, ...prev].slice(0, 100));
+        loadStats();
+      }
+    });
+
+    return () => ws.close();
+  }, []);
+
   const refreshAgents = async () => {
-    const targetsData = await api.getAITargets();
-    setAgents(mapTargetsToAgents(targetsData));
-    loadStats();
+    try {
+      const [targetsData, assignmentsData] = await Promise.all([
+        api.getAITargets(),
+        api.getSkillAssignments().catch(() => []),
+      ]);
+      setAgents(mapTargetsToAgents(targetsData, assignmentsData));
+      loadStats();
+    } catch (error) {
+      console.error('Error refreshing agents:', error);
+    }
   };
 
   const refreshHooks = async () => {
@@ -109,18 +134,6 @@ export default function Home() {
     setModels(data);
     loadStats();
   };
-
-  const PageHeader = ({ title, subtitle, accent = "Intelligence" }: { title: string, subtitle: string, accent?: string }) => (
-    <div className="mb-8">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-        <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">System {accent}</span>
-      </div>
-      <h1 className="text-3xl font-black text-white tracking-tight">
-        {title} <span className="text-muted font-light">{subtitle}</span>
-      </h1>
-    </div>
-  );
 
   return (
     <DashboardLayout activeTab={activeTab} onTabChange={setActiveTab}>
@@ -204,6 +217,13 @@ export default function Home() {
       )}
 
       {activeTab === 'agents' && (
+        <div className="animate-fade-in space-y-6">
+          <PageHeader title="Agent" subtitle="Registry" accent="Deployed Nodes" />
+          <AgentList agents={agents} onRefresh={refreshAgents} showAll={true} />
+        </div>
+      )}
+
+      {activeTab === 'claude' && (
         <div className="animate-fade-in space-y-6">
           <PageHeader title="Claude Code" subtitle="Control" accent="Runtime" />
           <ClaudeControlPanel />

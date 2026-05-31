@@ -2,7 +2,7 @@
 
 import { ReactNode } from 'react';
 
-type DashboardTab = 'dashboard' | 'agents' | 'antigravity' | 'skills' | 'clisessions' | 'codex' | 'terminal' | 'tasks' | 'activity' | 'system' | 'hooks' | 'analytics' | 'models';
+type DashboardTab = 'dashboard' | 'agents' | 'claude' | 'antigravity' | 'skills' | 'clisessions' | 'codex' | 'terminal' | 'tasks' | 'activity' | 'system' | 'hooks' | 'analytics' | 'models';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -42,7 +42,8 @@ export default function DashboardLayout({ children, activeTab, onTabChange }: Da
       items: [
         { id: 'antigravity', label: 'Antigravity Core', icon: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z' },
         { id: 'codex', label: 'Codex Engine', icon: 'M12 6V3m0 18v-3m6-6h3M3 12h3m10.95-4.95l2.12-2.12M4.93 19.07l2.12-2.12m0-9.9L4.93 4.93m14.14 14.14l-2.12-2.12M9 9h6v6H9z' },
-        { id: 'agents', label: 'Claude Code', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' }
+        { id: 'claude', label: 'Claude Code', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
+        { id: 'agents', label: 'Agent Registry', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z' }
       ]
     },
     {

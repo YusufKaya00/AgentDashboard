@@ -160,5 +160,23 @@
     "enabled": true,
     "active": true,
     "created_at": "2026-05-21T20:41:00Z"
+  },
+  {
+    "id": "google-search",
+    "name": "Google Search",
+    "description": "Search the web for information using Google Search.",
+    "category": "search",
+    "enabled": true,
+    "active": true,
+    "created_at": "2026-05-31T17:23:47Z"
+  },
+  {
+    "id": "url-context",
+    "name": "URL Context",
+    "description": "Fetch content from specified web URLs.",
+    "category": "search",
+    "enabled": true,
+    "active": true,
+    "created_at": "2026-05-31T17:23:47Z"
   }
 ]

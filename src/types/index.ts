@@ -12,6 +12,8 @@ export interface Agent {
   role?: 'team_lead' | 'worker' | 'specialist';
   parent_agent_id?: string;
   capabilities: string[];
+  skills?: string[];
+  runtime?: string;
 }
 
 export interface Hook {
