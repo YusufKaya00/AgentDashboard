@@ -50,6 +50,8 @@ export default function SkillManager() {
     name: '',
     description: '',
     category: 'custom',
+    source: 'gemini',
+    instructions: '',
   });
   const [activeTargetTab, setActiveTargetTab] = useState<'claude' | 'antigravity' | 'codex' | 'infrastructure'>('claude');
 
@@ -157,7 +159,7 @@ export default function SkillManager() {
   const handleAddSkill = async (event: React.FormEvent) => {
     event.preventDefault();
     await api.createSkill(newSkill);
-    setNewSkill({ name: '', description: '', category: 'custom' });
+    setNewSkill({ name: '', description: '', category: 'custom', source: 'gemini', instructions: '' });
     setShowAddForm(false);
     await loadOverview();
   };
@@ -194,7 +196,7 @@ export default function SkillManager() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setShowAddForm(!showAddForm)} className="btn btn-secondary">
-            {showAddForm ? 'Close' : 'New Claude Skill'}
+            {showAddForm ? 'Close' : 'New Dashboard Skill'}
           </button>
           <button onClick={loadOverview} className="btn btn-primary">Refresh</button>
         </div>
@@ -217,8 +219,8 @@ export default function SkillManager() {
 
       {showAddForm && (
         <form onSubmit={handleAddSkill} className="glass-card border-primary/20">
-          <h3 className="text-xl font-bold text-white mb-5">Register Claude Dashboard Skill</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <h3 className="text-xl font-bold text-white mb-5">Register Dashboard Skill</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <input
               type="text"
               value={newSkill.name}
@@ -234,13 +236,28 @@ export default function SkillManager() {
               className="input"
               placeholder="category"
             />
+            <select
+              value={newSkill.source}
+              onChange={(event) => setNewSkill({ ...newSkill, source: event.target.value })}
+              className="select"
+            >
+              <option value="gemini">Gemini / Antigravity</option>
+              <option value="codex-user">Codex User Skill</option>
+              <option value="claude">Claude Dashboard Skill</option>
+            </select>
             <button type="submit" className="btn btn-primary">Create Skill</button>
             <textarea
               value={newSkill.description}
               onChange={(event) => setNewSkill({ ...newSkill, description: event.target.value })}
-              className="textarea md:col-span-3"
+              className="textarea md:col-span-4"
               placeholder="What this skill enables..."
               required
+            />
+            <textarea
+              value={newSkill.instructions}
+              onChange={(event) => setNewSkill({ ...newSkill, instructions: event.target.value })}
+              className="textarea md:col-span-4"
+              placeholder="Exact skill instructions injected into assigned agents..."
             />
           </div>
         </form>

@@ -143,6 +143,8 @@ export interface CodexAgent {
   role: string;
   description: string;
   capabilities: string[];
+  model?: string;
+  status?: string;
 }
 
 export interface CodexSkill {

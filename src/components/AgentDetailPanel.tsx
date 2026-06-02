@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -31,6 +31,7 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
   const [name, setName] = useState(agent.name);
   const [description, setDescription] = useState(agent.description);
   const [model, setModel] = useState(agent.model);
+  const [runtime, setRuntime] = useState(agent.runtime || 'antigravity');
   const [status, setStatus] = useState(agent.status);
 
   // Skills Draft State
@@ -40,6 +41,8 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
   const [newSkillName, setNewSkillName] = useState('');
   const [newSkillDesc, setNewSkillDesc] = useState('');
   const [newSkillCategory, setNewSkillCategory] = useState('custom');
+  const [newSkillSource, setNewSkillSource] = useState(agent.runtime === 'codex' ? 'codex-user' : agent.runtime === 'claude' ? 'claude' : 'gemini');
+  const [newSkillInstructions, setNewSkillInstructions] = useState('');
   const [newSkillFilePath, setNewSkillFilePath] = useState('');
   const [creatingSkill, setCreatingSkill] = useState(false);
   const [skillCreatedSuccess, setSkillCreatedSuccess] = useState(false);
@@ -47,21 +50,21 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
   // Compute exact target key
   const agentTargetKey = useMemo(() => {
     return agent.config?.target_key || 
-      (agent.runtime === 'claude' ? `claude_agent:${agent.id}` :
-       agent.runtime === 'codex' ? `codex_agent:${agent.id}` :
+      (runtime === 'claude' ? `claude_agent:${agent.id}` :
+       runtime === 'codex' ? `codex_agent:${agent.id}` :
        agent.id === 'antigravity' ? `antigravity_agent:${agent.id}` : `subagent:${agent.id}`);
-  }, [agent]);
+  }, [agent, runtime]);
 
   // Compute file path to prompt
   const promptFilePath = useMemo(() => {
-    if (agent.runtime === 'claude') {
+    if (runtime === 'claude') {
       return `.claude/agents/${agent.id}.md`;
-    } else if (agent.runtime === 'codex') {
+    } else if (runtime === 'codex') {
       return `.codex/agents/${agent.id}.md`;
     } else {
       return `.gemini/antigravity/agents/${agent.id}.md`;
     }
-  }, [agent]);
+  }, [agent, runtime]);
 
   const loadData = useCallback(async () => {
     try {
@@ -112,6 +115,7 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
         name,
         description,
         model,
+        runtime,
         status,
         system_prompt: prompt // preserve prompt
       });
@@ -133,6 +137,7 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
         name,
         description,
         model,
+        runtime,
         status,
         system_prompt: prompt
       });
@@ -193,12 +198,13 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
         name: newSkillName,
         description: newSkillDesc,
         category: newSkillCategory,
+        source: newSkillSource,
+        instructions: newSkillInstructions,
         file_path: newSkillFilePath,
         enabled: true,
       });
 
-      // The new skill's unified skill key
-      const newSkillKey = `gemini:${skill.id}`;
+      const newSkillKey = `${skill.source || newSkillSource}:${skill.id}`;
 
       // Assign to this agent immediately
       await api.replaceSkillAssignments(newSkillKey, [agentTargetKey]);
@@ -206,6 +212,8 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
       setNewSkillName('');
       setNewSkillDesc('');
       setNewSkillCategory('custom');
+      setNewSkillSource(runtime === 'codex' ? 'codex-user' : runtime === 'claude' ? 'claude' : 'gemini');
+      setNewSkillInstructions('');
       setNewSkillFilePath('');
       
       setSkillCreatedSuccess(true);
@@ -308,6 +316,19 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
                     </div>
 
                     <div className="space-y-1">
+                      <label className="text-[9px] font-black text-muted uppercase tracking-widest ml-1">Runtime</label>
+                      <select
+                        value={runtime}
+                        onChange={(e) => setRuntime(e.target.value)}
+                        className="select py-2 text-xs"
+                      >
+                        <option value="antigravity">Gemini / Antigravity</option>
+                        <option value="codex">Codex</option>
+                        <option value="claude">Claude</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1">
                       <label className="text-[9px] font-black text-muted uppercase tracking-widest ml-1">Binding Model</label>
                       <select 
                         value={model} 
@@ -315,7 +336,7 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
                         className="select py-2 text-xs"
                       >
                         {models.map(m => (
-                          <option key={m.id} value={m.model_id || m.id}>{m.name}</option>
+                          <option key={m.id} value={m.id}>{m.name}</option>
                         ))}
                         {models.length === 0 && (
                           <>
@@ -494,6 +515,19 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
                   </div>
 
                   <div className="space-y-1">
+                    <label className="text-[8px] font-black text-muted uppercase tracking-widest ml-1">Skill Source</label>
+                    <select
+                      value={newSkillSource}
+                      onChange={(e) => setNewSkillSource(e.target.value)}
+                      className="select py-2 text-xs"
+                    >
+                      <option value="gemini">Gemini / Antigravity</option>
+                      <option value="codex-user">Codex User Skill</option>
+                      <option value="claude">Claude Dashboard Skill</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
                     <label className="text-[8px] font-black text-muted uppercase tracking-widest ml-1">Description</label>
                     <input 
                       type="text" 
@@ -501,6 +535,16 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
                       onChange={(e) => setNewSkillDesc(e.target.value)}
                       className="input py-2 text-xs" 
                       placeholder="What this skill does..."
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-muted uppercase tracking-widest ml-1">Instructions</label>
+                    <textarea
+                      value={newSkillInstructions}
+                      onChange={(e) => setNewSkillInstructions(e.target.value)}
+                      className="textarea text-xs py-2 min-h-[90px]"
+                      placeholder="Write the exact behavior, constraints, and steps this skill should inject into the agent."
                     />
                   </div>
 

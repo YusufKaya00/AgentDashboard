@@ -12,6 +12,7 @@ describe('getCodexInventory', () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'codex-inventory-'));
     await fs.ensureDir(path.join(tempDir, 'skills', '.system', 'imagegen'));
     await fs.ensureDir(path.join(tempDir, 'plugins', 'cache', 'openai-curated', 'superpowers', 'skills', 'debugging'));
+    await fs.ensureDir(path.join(tempDir, 'agents'));
     await fs.ensureDir(path.join(tempDir, 'sessions'));
 
     await fs.writeFile(
@@ -34,13 +35,29 @@ describe('getCodexInventory', () => {
       JSON.stringify({ id: 'session-1', workspace: 'C:/repo', updated_at: '2026-05-18T08:00:00.000Z' }) + '\n',
       'utf-8'
     );
+    await fs.writeJson(path.join(tempDir, 'agents.json'), [
+      {
+        id: 'reviewer',
+        name: 'Reviewer',
+        role: 'agent',
+        description: 'Reviews repository changes',
+        model: 'codex:gpt-5',
+        status: 'active',
+        capabilities: ['review', 'code'],
+      },
+    ]);
+    await fs.writeFile(
+      path.join(tempDir, 'agents', 'prompt-only.md'),
+      '---\nname: Prompt Only\nrole: specialist\ndescription: Loaded from markdown\ncapabilities: docs,planning\n---\n# Prompt Only\n',
+      'utf-8'
+    );
   });
 
   afterEach(async () => {
     await fs.remove(tempDir);
   });
 
-  it('summarizes Codex skills, built-in agents, config, and recent sessions without leaking secrets', async () => {
+  it('summarizes Codex skills, configured agents, config, and recent sessions without leaking secrets', async () => {
     const inventory = await getCodexInventory({
       codexHome: tempDir,
       workspaceDir: 'C:/repo',
@@ -52,7 +69,9 @@ describe('getCodexInventory', () => {
       'imagegen',
       'systematic-debugging',
     ]);
-    assert.deepEqual(inventory.agents.map((agent) => agent.id), ['default', 'explorer', 'worker']);
+    assert.deepEqual(inventory.agents.map((agent) => agent.id).sort(), ['prompt-only', 'reviewer']);
+    assert.equal(inventory.agents.find((agent) => agent.id === 'reviewer')?.model, 'codex:gpt-5');
+    assert.deepEqual(inventory.agents.find((agent) => agent.id === 'prompt-only')?.capabilities, ['docs', 'planning']);
     assert.equal(inventory.sessions.total, 1);
     assert.equal(inventory.config.redacted.api_key, '[redacted]');
     assert.equal(inventory.config.redacted.model, 'gpt-5.5');

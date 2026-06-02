@@ -28,6 +28,8 @@ export interface CodexInventory {
     role: string;
     description: string;
     capabilities: string[];
+    model?: string;
+    status?: string;
   }>;
   skills: {
     total: number;
@@ -43,30 +45,6 @@ export interface CodexInventory {
     recent: Array<Record<string, unknown>>;
   };
 }
-
-const CODEX_AGENTS = [
-  {
-    id: 'default',
-    name: 'Default Codex',
-    role: 'primary',
-    description: 'Main coding collaborator for implementation, debugging, review, and workspace operation.',
-    capabilities: ['code-editing', 'terminal', 'repo-analysis', 'verification'],
-  },
-  {
-    id: 'explorer',
-    name: 'Explorer',
-    role: 'subagent',
-    description: 'Read-only codebase investigator for focused questions that can run in parallel.',
-    capabilities: ['code-search', 'architecture-reading', 'risk-scouting'],
-  },
-  {
-    id: 'worker',
-    name: 'Worker',
-    role: 'subagent',
-    description: 'Bounded implementation agent for disjoint file ownership and parallel code changes.',
-    capabilities: ['implementation', 'test-fixing', 'refactoring'],
-  },
-];
 
 const SECRET_KEY_PATTERN = /(api[_-]?key|token|secret|password|auth|credential|session|sid)/i;
 
@@ -134,6 +112,71 @@ const readSkill = async (codexHome: string, filePath: string): Promise<CodexSkil
   } catch {
     return null;
   }
+};
+
+const firstMarkdownHeading = (content: string) => {
+  const line = content.split(/\r?\n/).find((item) => item.trim().startsWith('# '));
+  return line ? line.replace(/^#\s+/, '').trim() : '';
+};
+
+const readCodexAgentPromptFiles = async (codexHome: string): Promise<CodexInventory['agents']> => {
+  const agentsDir = path.join(codexHome, 'agents');
+  if (!(await fs.pathExists(agentsDir))) return [];
+
+  const entries = await fs.readdir(agentsDir, { withFileTypes: true }).catch(() => []);
+  const files = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.md'));
+
+  return Promise.all(
+    files.map(async (entry) => {
+      const filePath = path.join(agentsDir, entry.name);
+      const content = await fs.readFile(filePath, 'utf-8').catch(() => '');
+      const frontMatter = parseFrontMatter(content);
+      const id = path.basename(entry.name, '.md');
+
+      const agent = {
+        id,
+        name: frontMatter.name || firstMarkdownHeading(content) || id,
+        role: frontMatter.role || 'agent',
+        description: frontMatter.description || '',
+        capabilities: frontMatter.capabilities
+          ? frontMatter.capabilities.split(',').map((item) => item.trim()).filter(Boolean)
+          : [],
+        status: frontMatter.status || 'active',
+      };
+      return frontMatter.model ? { ...agent, model: frontMatter.model } : agent;
+    })
+  );
+};
+
+const readCodexAgents = async (codexHome: string): Promise<CodexInventory['agents']> => {
+  const metadataPath = path.join(codexHome, 'agents.json');
+  const promptAgents = await readCodexAgentPromptFiles(codexHome);
+  const byId = new Map(promptAgents.map((agent) => [agent.id, agent]));
+
+  const metadata = await fs.readJson(metadataPath).catch(() => []);
+  if (Array.isArray(metadata)) {
+    for (const raw of metadata) {
+      if (!raw || typeof raw !== 'object') continue;
+      const id = String(raw.id || '').trim();
+      if (!id) continue;
+
+      const fromPrompt = byId.get(id);
+      const agent = {
+        id,
+        name: String(raw.name || fromPrompt?.name || id),
+        role: String(raw.role || fromPrompt?.role || 'agent'),
+        description: String(raw.description || fromPrompt?.description || ''),
+        capabilities: Array.isArray(raw.capabilities)
+          ? raw.capabilities.map((item: unknown) => String(item))
+          : fromPrompt?.capabilities || [],
+        status: raw.status ? String(raw.status) : fromPrompt?.status || 'active',
+      };
+      const model = raw.model ? String(raw.model) : fromPrompt?.model;
+      byId.set(id, model ? { ...agent, model } : agent);
+    }
+  }
+
+  return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
 };
 
 const parseTomlLikeConfig = async (filePath: string) => {
@@ -220,7 +263,8 @@ export const getCodexInventory = async ({
     { system: 0, plugin: 0, user: 0 }
   );
 
-  const [configFiles, redacted, sessions] = await Promise.all([
+  const [agents, configFiles, redacted, sessions] = await Promise.all([
+    readCodexAgents(codexHome),
     Promise.all(['config.toml', 'models_cache.json', 'session_index.jsonl', '.codex-global-state.json'].map((name) => getFileSummary(codexHome, name))),
     parseTomlLikeConfig(path.join(codexHome, 'config.toml')),
     readSessionIndex(codexHome, workspaceDir),
@@ -233,7 +277,7 @@ export const getCodexInventory = async ({
       workspace_dir: workspaceDir,
       available,
     },
-    agents: CODEX_AGENTS,
+    agents,
     skills: {
       total: skills.length,
       by_source: bySource,

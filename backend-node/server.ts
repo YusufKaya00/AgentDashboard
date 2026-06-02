@@ -123,7 +123,17 @@ const getAgentPaths = (runtime: string, id: string) => {
   }
 };
 
-const determineRuntime = (model: string): string => {
+const normalizeRuntime = (runtime: string | undefined) => {
+  const value = (runtime || '').toLowerCase();
+  if (value === 'claude' || value === 'codex' || value === 'antigravity') return value;
+  if (value === 'gemini') return 'antigravity';
+  return '';
+};
+
+const determineRuntime = (model: string, explicitRuntime?: string): string => {
+  const normalized = normalizeRuntime(explicitRuntime);
+  if (normalized) return normalized;
+
   const m = (model || '').toLowerCase();
   if (m.startsWith('claude:') || m.includes('claude') || m.includes('anthropic')) {
     return 'claude';
@@ -269,6 +279,15 @@ const writeJson = async (filePath: string, data: any) => {
 };
 
 const genId = () => Math.random().toString(36).substr(2, 9) + Date.now().toString(36);
+
+const toSlug = (value: string, fallback = genId()) => {
+  const slug = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || fallback;
+};
 
 const getMergedModels = async () => {
   const customModels = await readJson(MODELS_FILE, []);
@@ -837,9 +856,9 @@ app.get('/api/agents/:id', async (req, res) => {
 });
 
 app.post('/api/agents', async (req, res) => {
-  const { name, prompt, model, description, capabilities, role, skills } = req.body;
+  const { name, prompt, system_prompt, model, description, capabilities, role, skills, runtime: requestedRuntime } = req.body;
   const id = req.body.id || name.toLowerCase().replace(/\s+/g, '-');
-  const runtime = determineRuntime(model);
+  const runtime = determineRuntime(model, requestedRuntime);
   
   const newAgent = {
     id,
@@ -851,10 +870,10 @@ app.post('/api/agents', async (req, res) => {
     capabilities: capabilities || [],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
-    config: req.body.config || {}
+    config: { ...(req.body.config || {}), runtime }
   };
   
-  await saveAgentToRuntime(runtime, newAgent, prompt || `# ${name}\n\nAgent prompt.`);
+  await saveAgentToRuntime(runtime, newAgent, system_prompt || prompt || `# ${name}\n\nAgent prompt.`);
   
   if (Array.isArray(skills)) {
     await updateAgentSkills(id, runtime, skills);
@@ -870,13 +889,14 @@ app.put('/api/agents/:id', async (req, res) => {
   
   if (!existingAgent) return res.status(404).json({ error: 'Not found' });
   
-  const runtime = determineRuntime(req.body.model || existingAgent.model);
+  const runtime = determineRuntime(req.body.model || existingAgent.model, req.body.runtime || existingAgent.runtime);
   
   const updatedAgent = {
     ...existingAgent,
     ...req.body,
     id: req.params.id,
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
+    config: { ...(existingAgent.config || {}), ...(req.body.config || {}), runtime }
   };
   
   // If runtime changed, clean from old runtime
@@ -1030,12 +1050,31 @@ app.get('/api/skills/stats', async (_req, res) => {
   });
 });
 app.post('/api/skills', async (req, res) => {
-  const skills = await readJson(SKILLS_FILE, []);
-  const skill = normalizeSkill({ id: genId(), ...req.body, enabled: true, active: true });
-  skills.push(skill);
-  await writeJson(SKILLS_FILE, skills);
-  logActivity('skill', `Skill created: ${skill.name}`, 'system');
-  res.json(skill);
+  const requestedSource = String(req.body.source || req.body.runtime || 'gemini').toLowerCase();
+  const id = toSlug(req.body.id || req.body.name);
+  const skill = normalizeSkill({ id, ...req.body, enabled: true, active: true });
+
+  if (requestedSource === 'codex' || requestedSource === 'codex-user') {
+    const skillDir = path.join(os.homedir(), '.codex', 'skills', id);
+    await fs.ensureDir(skillDir);
+    await fs.writeFile(
+      path.join(skillDir, 'SKILL.md'),
+      renderDashboardSkillMarkdown({ ...skill, source: 'codex-user', skill_key: `codex-user:${id}` }),
+      'utf-8'
+    );
+    await logActivity('skill', `Codex skill created: ${skill.name}`, 'system');
+    return res.json({ ...skill, source: 'codex-user', file_path: path.join(skillDir, 'SKILL.md') });
+  }
+
+  const targetFile = requestedSource === 'claude'
+    ? path.join(ROOT_DIR, '.claude', 'skills.json')
+    : SKILLS_FILE;
+  const skills = await readJson(targetFile, []);
+  const nextSkills = Array.isArray(skills) ? skills.filter((item: any) => item.id !== id) : [];
+  nextSkills.push(skill);
+  await writeJson(targetFile, nextSkills);
+  logActivity('skill', `Skill created: ${skill.name} (${requestedSource === 'claude' ? 'claude' : 'gemini'})`, 'system');
+  res.json({ ...skill, source: requestedSource === 'claude' ? 'claude' : 'gemini' });
 });
 app.put('/api/skills/:id', async (req, res) => {
   const skills = await readJson(SKILLS_FILE, []);
@@ -1524,42 +1563,61 @@ const syncAllSkillsToClaudeMd = async () => {
   }
 };
 
-const syncCodexSkills = async (assignments: any[], skills: any[]) => {
+const skillFolderName = (skillKey: string) => `dashboard-${skillKey.replace(/[^a-zA-Z0-9_-]+/g, '-')}`;
+
+const skillInstructions = (skill: any) => {
+  return String(skill.instructions || skill.content || skill.prompt || skill.description || '').trim();
+};
+
+const renderDashboardSkillMarkdown = (skill: any) => {
+  const instructions = skillInstructions(skill);
+  return `---
+name: ${JSON.stringify(skill.name || skill.id)}
+description: ${JSON.stringify(skill.description || '')}
+category: ${JSON.stringify(skill.category || 'custom')}
+source: ${JSON.stringify(skill.source || 'dashboard')}
+dashboard_managed: true
+---
+
+# ${skill.name || skill.id}
+
+${instructions || skill.description || 'No skill instructions provided.'}
+`;
+};
+
+const syncCodexSkills = async (assignments: any[], skills: any[], effectiveCodexSkillKeys: Set<string> = new Set()) => {
   try {
     const codexSkillsDir = path.join(os.homedir(), '.codex', 'skills');
     await fs.ensureDir(codexSkillsDir);
 
-    // Find all skills that are assigned to Codex targets
     const codexAssignments = assignments.filter((a: any) => a.target_key.startsWith('codex_agent:'));
-    const codexAssignedSkillIds = new Set(codexAssignments.map((a: any) => a.skill_id));
+    const dashboardSkillByKey = new Map(
+      skills
+        .filter((skill: any) => !String(skill.skill_key || '').startsWith('codex-'))
+        .map((skill: any) => [skill.skill_key, skill])
+    );
+    const codexAssignedSkillKeys = new Set<string>(
+      codexAssignments
+        .map((assignment: any) => assignment.skill_key)
+        .filter((skillKey: string) => dashboardSkillByKey.has(skillKey))
+    );
+    for (const skillKey of effectiveCodexSkillKeys) {
+      if (dashboardSkillByKey.has(skillKey)) codexAssignedSkillKeys.add(skillKey);
+    }
 
-    // For each assigned skill, write/update SKILL.md
-    for (const skillId of codexAssignedSkillIds) {
-      const skill = skills.find((s: any) => s.id === skillId);
+    for (const skillKey of codexAssignedSkillKeys) {
+      const skill = dashboardSkillByKey.get(skillKey);
       if (!skill) continue;
 
-      const skillDir = path.join(codexSkillsDir, skill.id);
+      const skillDir = path.join(codexSkillsDir, skillFolderName(skillKey));
       await fs.ensureDir(skillDir);
-
-      const skillMdContent = `+++
-title = ${JSON.stringify(skill.name)}
-description = ${JSON.stringify(skill.description || '')}
-category = ${JSON.stringify(skill.category || 'custom')}
-+++
-
-# ${skill.name}
-
-${skill.description || ''}
-`;
-      await fs.writeFile(path.join(skillDir, 'SKILL.md'), skillMdContent, 'utf-8');
+      await fs.writeFile(path.join(skillDir, 'SKILL.md'), renderDashboardSkillMarkdown(skill), 'utf-8');
       console.log(`[Codex Skill Sync] Exported skill ${skill.name} to ${skillDir}`);
     }
 
-    // Clean up DB skill folders that are no longer assigned to Codex
-    const allDbSkillIds = new Set(skills.map((s: any) => s.id));
     const existingDirs = await fs.readdir(codexSkillsDir).catch(() => []);
     for (const dirName of existingDirs) {
-      if (allDbSkillIds.has(dirName) && !codexAssignedSkillIds.has(dirName)) {
+      if (dirName.startsWith('dashboard-') && !Array.from(codexAssignedSkillKeys).some((skillKey) => skillFolderName(skillKey) === dirName)) {
         const dirToDelete = path.join(codexSkillsDir, dirName);
         await fs.remove(dirToDelete);
         console.log(`[Codex Skill Sync] Cleaned up unassigned skill directory: ${dirToDelete}`);
@@ -1570,14 +1628,50 @@ ${skill.description || ''}
   }
 };
 
+const syncRuntimeSkillFiles = async (assignments: any[], skills: any[]) => {
+  const runtimeTargets = [
+    { prefix: 'antigravity_agent:', dir: path.join(CLAUDE_DIR, 'skills') },
+    { prefix: 'subagent:', dir: path.join(CLAUDE_DIR, 'skills') },
+    { prefix: 'claude_agent:', dir: path.join(ROOT_DIR, '.claude', 'skills') },
+  ];
+
+  for (const target of runtimeTargets) {
+    await fs.ensureDir(target.dir);
+    const assignedSkillKeys = new Set(
+      assignments
+        .filter((assignment: any) => String(assignment.target_key || '').startsWith(target.prefix))
+        .map((assignment: any) => assignment.skill_key)
+    );
+
+    for (const skill of skills) {
+      if (!assignedSkillKeys.has(skill.skill_key) || String(skill.skill_key || '').startsWith('codex-')) continue;
+      const skillDir = path.join(target.dir, skillFolderName(skill.skill_key));
+      await fs.ensureDir(skillDir);
+      await fs.writeFile(path.join(skillDir, 'SKILL.md'), renderDashboardSkillMarkdown(skill), 'utf-8');
+    }
+
+    const existingDirs = await fs.readdir(target.dir).catch(() => []);
+    for (const dirName of existingDirs) {
+      if (!dirName.startsWith('dashboard-')) continue;
+      const stillAssigned = Array.from(assignedSkillKeys).some((skillKey) => skillFolderName(String(skillKey)) === dirName);
+      if (!stillAssigned) {
+        await fs.remove(path.join(target.dir, dirName));
+      }
+    }
+  }
+};
+
 const syncAgentCapabilities = async (assignments: any[]) => {
   try {
-    const [skills, agents] = await Promise.all([
+    const localSkillsFile = path.join(ROOT_DIR, '.claude', 'skills.json');
+    const [geminiSkills, claudeSkills, agents, models, providers] = await Promise.all([
       readJson(SKILLS_FILE, []),
-      loadAllAgents()
+      readJson(localSkillsFile, []),
+      loadAllAgents(),
+      getMergedModels(),
+      readJson(PROVIDERS_FILE, [])
     ]);
 
-    // Get Codex inventory for Codex skills
     let codexSkills: any[] = [];
     try {
       const codexHome = path.join(os.homedir(), '.codex');
@@ -1585,33 +1679,85 @@ const syncAgentCapabilities = async (assignments: any[]) => {
       codexSkills = inventory.skills?.items || [];
     } catch {}
 
+    const normalizeDashboardSkill = (skill: any, source: 'gemini' | 'claude') => ({
+      ...skill,
+      source,
+      skill_key: `${source}:${skill.id}`,
+      category: skill.category || 'custom',
+    });
+
+    const normalizeCodexSkill = (skill: any) => {
+      const source = skill.source === 'system' ? 'codex-system' : skill.source === 'user' ? 'codex-user' : 'codex-plugin';
+      return {
+        ...skill,
+        source,
+        skill_key: `${source}:${skill.id}`,
+        category: skill.source || 'codex',
+      };
+    };
+
+    const allSkills = [
+      ...(Array.isArray(geminiSkills) ? geminiSkills.map((skill: any) => normalizeDashboardSkill(skill, 'gemini')) : []),
+      ...(Array.isArray(claudeSkills) ? claudeSkills.map((skill: any) => normalizeDashboardSkill(skill, 'claude')) : []),
+      ...codexSkills.map(normalizeCodexSkill),
+    ];
+
+    const skillByKey = new Map(allSkills.map((skill: any) => [skill.skill_key, skill]));
+    const effectiveCodexSkillKeys = new Set<string>();
+
+    const targetKeysForAgent = (agent: any) => {
+      const keys = new Set<string>();
+      if (agent.runtime === 'claude') keys.add(`claude_agent:${agent.id}`);
+      if (agent.runtime === 'codex') keys.add(`codex_agent:${agent.id}`);
+      if (agent.runtime === 'antigravity') keys.add(`antigravity_agent:${agent.id}`);
+      if (agent.id === 'antigravity') keys.add(`antigravity_agent:${agent.id}`);
+
+      const agentModel = String(agent.model || '');
+      const matchingModels = Array.isArray(models)
+        ? models.filter((model: any) => model && (model.id === agentModel || model.model_id === agentModel))
+        : [];
+      for (const model of matchingModels) {
+        keys.add(`model:${model.id}`);
+        const provider = Array.isArray(providers)
+          ? providers.find((item: any) => item.id === model.provider || item.name === model.provider || item.type === model.provider)
+          : null;
+        if (provider) keys.add(`provider:${provider.id}`);
+      }
+
+      return Array.from(keys);
+    };
+
     let changed = false;
     for (const agent of agents) {
-      const agentTargetKeys = [`claude_agent:${agent.id}`, `antigravity_agent:${agent.id}`, `codex_agent:${agent.id}`];
+      const agentTargetKeys = targetKeysForAgent(agent);
       const agentAssignments = assignments.filter((a: any) => agentTargetKeys.includes(a.target_key));
       
-      const assignedSkillNames: string[] = [];
+      const assignedSkillDetails: any[] = [];
       for (const assignment of agentAssignments) {
-        const skill = skills.find((s: any) => s.id === assignment.skill_id);
-        if (skill) {
-          assignedSkillNames.push(skill.name);
-        } else {
-          const codexSkill = codexSkills.find((s: any) => s.id === assignment.skill_id);
-          if (codexSkill) {
-            assignedSkillNames.push(codexSkill.name);
-          } else {
-            assignedSkillNames.push(assignment.skill_id);
+        const skill = skillByKey.get(assignment.skill_key) || {
+          id: assignment.skill_id,
+          name: assignment.skill_id,
+          description: '',
+          category: 'custom',
+          skill_key: assignment.skill_key,
+        };
+        assignedSkillDetails.push(skill);
+      }
+      if (agent.runtime === 'codex') {
+        for (const skill of assignedSkillDetails) {
+          if (skill?.skill_key && !String(skill.skill_key).startsWith('codex-')) {
+            effectiveCodexSkillKeys.add(skill.skill_key);
           }
         }
       }
+      const assignedSkillNames = assignedSkillDetails.map((skill) => skill.name || skill.id);
       
       const coreCaps = agent.id === 'antigravity' 
         ? ["code", "analysis", "planning", "subagents", "terminal", "browser", "image-gen"] 
         : (agent.capabilities || ["chat", "tool-call"]);
       
       const allRegisteredSkillNames = [
-        ...skills.map((s: any) => s.name),
-        ...codexSkills.map((s: any) => s.name)
+        ...allSkills.map((s: any) => s.name)
       ];
       
       const cleanCoreCaps = coreCaps.filter((cap: string) => !allRegisteredSkillNames.includes(cap));
@@ -1637,11 +1783,14 @@ const syncAgentCapabilities = async (assignments: any[]) => {
           let skillsBlock = `\n${startMarker}\n### Capabilities & Skills\n`;
           if (assignedSkillNames.length > 0) {
             for (const skillName of assignedSkillNames) {
-              const skillObj = skills.find((s: any) => s.name === skillName) || 
-                              codexSkills.find((s: any) => s.name === skillName);
+              const skillObj = assignedSkillDetails.find((s: any) => (s.name || s.id) === skillName);
               const desc = skillObj ? (skillObj.description || 'N/A') : 'N/A';
               const cat = skillObj ? (skillObj.category || 'custom') : 'custom';
+              const instructions = skillObj ? skillInstructions(skillObj) : '';
               skillsBlock += `- **${skillName}**: ${desc} (Category: ${cat})\n`;
+              if (instructions && instructions !== desc) {
+                skillsBlock += `  - Instructions: ${instructions.replace(/\r?\n/g, ' ')}\n`;
+              }
             }
           } else {
             skillsBlock += `No dashboard-assigned skills.\n`;
@@ -1677,7 +1826,8 @@ const syncAgentCapabilities = async (assignments: any[]) => {
     }
 
     // Export skills assigned to Codex targets
-    await syncCodexSkills(assignments, skills);
+    await syncCodexSkills(assignments, allSkills, effectiveCodexSkillKeys);
+    await syncRuntimeSkillFiles(assignments, allSkills);
 
     // Sync all skills to CLAUDE.md
     await syncAllSkillsToClaudeMd();

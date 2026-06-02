@@ -19,6 +19,7 @@ export interface DashboardAgent {
   status?: string;
   model?: string;
   capabilities?: string[];
+  runtime?: 'claude' | 'codex' | 'antigravity' | string;
 }
 
 export interface DashboardModel {
@@ -159,8 +160,8 @@ export const buildUnifiedSkills = (
 };
 
 export const buildAITargets = ({ agents, codexAgents, models, providers, subagents }: BuildTargetInput): AITarget[] => {
-  const claudeAgents = agents.filter(a => a.id !== 'antigravity');
-  const antigravityAgents = agents.filter(a => a.id === 'antigravity');
+  const claudeAgents = agents.filter((agent) => agent.runtime === 'claude');
+  const antigravityAgents = agents.filter((agent) => agent.runtime === 'antigravity');
 
   const claudeTargets = claudeAgents.map((agent) => ({
     target_key: `claude_agent:${agent.id}`,
@@ -213,10 +214,11 @@ export const buildAITargets = ({ agents, codexAgents, models, providers, subagen
     name: agent.name,
     type: 'codex_agent' as const,
     provider: 'codex',
-    status: agent.role,
+    status: agent.status || agent.role,
     metadata: {
       role: agent.role,
       active: true,
+      model: agent.model,
       capabilities: agent.capabilities ? agent.capabilities.join(',') : 'code-generation,refactor',
     },
   }));

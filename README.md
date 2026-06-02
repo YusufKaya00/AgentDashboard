@@ -1,5 +1,7 @@
 # Tnega: Unified Multi-Agent Control Plane & Dashboard
 
+> Current implementation audit: see `docs/agent-runtime-system.md` for the verified 2026-06-02 behavior of agent routing, runtime storage, skill assignment, and current native-vs-metadata limitations.
+
 > 🚧 **Still on the progress**
 
 Tnega is a centralized **Management, Monitoring, and Control Plane** designed for orchestrating advanced AI agent runtimes—specifically **Antigravity Core**, **Claude Code** (Anthropic), and **Codex Engine**—alongside custom models and providers. 

@@ -11,11 +11,19 @@ interface AgentModalProps {
 }
 
 export default function AgentModal({ agent, onSave, onClose }: AgentModalProps) {
+  const inferRuntime = (model: string) => {
+    const value = model.toLowerCase();
+    if (value.includes('claude') || value.includes('anthropic')) return 'claude';
+    if (value.includes('codex')) return 'codex';
+    return 'antigravity';
+  };
+
   const [formData, setFormData] = useState({
     id: agent?.id || '',
     name: agent?.name || '',
     description: agent?.description || '',
     model: agent?.model || 'claude-3-5-sonnet-20241022',
+    runtime: agent?.runtime || inferRuntime(agent?.model || 'claude-3-5-sonnet-20241022'),
     status: agent?.status || 'inactive',
     config: agent?.config || {},
     capabilities: agent?.capabilities || [],
@@ -49,11 +57,15 @@ export default function AgentModal({ agent, onSave, onClose }: AgentModalProps) 
 
   useEffect(() => {
     if (overview && agent?.id) {
-      const agentTargetKeys = [`claude_agent:${agent.id}`, `antigravity_agent:${agent.id}`, `codex_agent:${agent.id}`];
-      const initialSkills = overview.skills
-        .filter(s => s.assigned_targets.some(t => agentTargetKeys.includes(t.target_key)))
-        .map(s => s.skill_key);
-      setSelectedSkills(initialSkills);
+      const timer = window.setTimeout(() => {
+        const agentTargetKeys = [`claude_agent:${agent.id}`, `antigravity_agent:${agent.id}`, `codex_agent:${agent.id}`];
+        const initialSkills = overview.skills
+          .filter(s => s.assigned_targets.some(t => agentTargetKeys.includes(t.target_key)))
+          .map(s => s.skill_key);
+        setSelectedSkills(initialSkills);
+      }, 0);
+
+      return () => window.clearTimeout(timer);
     }
   }, [overview, agent]);
 
@@ -76,7 +88,7 @@ export default function AgentModal({ agent, onSave, onClose }: AgentModalProps) 
             {agent ? 'Edit Agent Identity' : 'Deploy New Entity'}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <label className="block text-[10px] font-black text-muted uppercase tracking-widest ml-1">
                   Agent Designation
@@ -92,6 +104,20 @@ export default function AgentModal({ agent, onSave, onClose }: AgentModalProps) 
               </div>
               <div className="space-y-2">
                 <label className="block text-[10px] font-black text-muted uppercase tracking-widest ml-1">
+                  Runtime
+                </label>
+                <select
+                  value={formData.runtime}
+                  onChange={(e) => setFormData({ ...formData, runtime: e.target.value })}
+                  className="select"
+                >
+                  <option value="antigravity">Gemini / Antigravity</option>
+                  <option value="codex">Codex</option>
+                  <option value="claude">Claude</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-muted uppercase tracking-widest ml-1">
                   Neural Model
                 </label>
                 <select
@@ -101,7 +127,7 @@ export default function AgentModal({ agent, onSave, onClose }: AgentModalProps) 
                 >
                   {models.map((model) => (
                     <option key={model.id} value={model.id}>
-                      {model.name}
+                      {model.name} ({model.provider})
                     </option>
                   ))}
                   <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>

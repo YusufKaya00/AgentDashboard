@@ -57,7 +57,7 @@ describe('ai control plane', () => {
 
   it('builds assignable targets across agents, Codex roles, models, and providers', () => {
     const targets = buildAITargets({
-      agents: [{ id: 'team_leader', name: 'Team Leader', status: 'active', model: 'claude-sonnet' }],
+      agents: [{ id: 'team_leader', name: 'Team Leader', runtime: 'claude', status: 'active', model: 'claude-sonnet' }],
       codexAgents: [{ id: 'worker', name: 'Worker', role: 'subagent', description: 'Implements', capabilities: ['code'] }],
       models: [{ id: 'gpt-5', name: 'GPT-5', provider: 'openai', enabled: true }],
       providers: [{ id: 'ollama', name: 'Ollama', type: 'ollama', active: true }],
@@ -112,5 +112,24 @@ describe('ai control plane', () => {
       ]
     );
     assert.equal(updated.find((assignment) => assignment.target_key === 'model:gpt-5')?.target_type, 'model');
+  });
+
+  it('uses agent runtime when building assignable agent targets', () => {
+    const targets = buildAITargets({
+      agents: [
+        { id: 'claude-reviewer', name: 'Claude Reviewer', runtime: 'claude', status: 'active', model: 'claude-sonnet' },
+        { id: 'gemini-planner', name: 'Gemini Planner', runtime: 'antigravity', status: 'active', model: 'gemini-2.5-pro' },
+        { id: 'codex-worker', name: 'Codex Worker', runtime: 'codex', status: 'active', model: 'codex:gpt-5' },
+      ],
+      codexAgents: [{ id: 'codex-worker', name: 'Codex Worker', role: 'agent', description: 'Works in Codex', capabilities: ['code'], model: 'codex:gpt-5', status: 'active' }],
+      models: [],
+      providers: [],
+    });
+
+    assert.deepEqual(targets.map((target) => target.target_key), [
+      'claude_agent:claude-reviewer',
+      'antigravity_agent:gemini-planner',
+      'codex_agent:codex-worker',
+    ]);
   });
 });
