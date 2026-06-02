@@ -23,3 +23,59 @@
 [1] ✅ Tnega Git Hooks installed successfully at .git/hooks/ (pre-commit, pre-push)
 [0] 
 [1] [Hooks System] Event "file.change" triggered. Running 0 hooks.
+[0]  GET / 200 in 630ms (next.js: 339ms, application-code: 292ms)
+[0] [browser] Encountered two children with the same key, `antigravity`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version. 
+[0]  GET / 200 in 41ms (next.js: 5ms, application-code: 37ms)
+[0] ✓ Compiled in 158ms
+[0]  GET / 200 in 148ms (next.js: 88ms, application-code: 60ms)
+[1] [Hooks System] Event "file.change" triggered. Running 0 hooks.
+[0] [browser] Encountered two children with the same key, `antigravity`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version. 
+[0] [browser] Encountered two children with the same key, `antigravity`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version. 
+[0] [browser] Encountered two children with the same key, `antigravity`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version. 
+[1] 18:08:04 [tsx] change in ./server.ts Restarting...
+[1] c🚀 Node.js Backend running on http://localhost:8000
+[1] 📁 Workspace: C:\Users\skyks\Desktop\AgentDashboard
+[1] 🌐 Providers: C:\Users\skyks\.gemini\antigravity\providers.json
+[1] ✅ Tnega Git Hooks installed successfully at .git/hooks/ (pre-commit, pre-push)
+[1] 18:08:29 [tsx] change in ./server.ts Restarting...
+[1] c🚀 Node.js Backend running on http://localhost:8000
+[1] 📁 Workspace: C:\Users\skyks\Desktop\AgentDashboard
+[1] 🌐 Providers: C:\Users\skyks\.gemini\antigravity\providers.json
+[1] ✅ Tnega Git Hooks installed successfully at .git/hooks/ (pre-commit, pre-push)
+[1] 18:08:56 [tsx] change in ./server.ts Restarting...
+[1] c🚀 Node.js Backend running on http://localhost:8000
+[1] 📁 Workspace: C:\Users\skyks\Desktop\AgentDashboard
+[1] 🌐 Providers: C:\Users\skyks\.gemini\antigravity\providers.json
+[1] ✅ Tnega Git Hooks installed successfully at .git/hooks/ (pre-commit, pre-push)
+[1] [Hooks System] Event "file.change" triggered. Running 0 hooks.
+[0] ✓ Compiled in 32ms
+[0]  GET / 200 in 117ms (next.js: 68ms, application-code: 48ms)
+[1] [Hooks System] Event "file.change" triggered. Running 0 hooks.
+[1] [Hooks System] Event "file.change" triggered. Running 0 hooks.
+[1] 18:11:12 [tsx] change in ./server.ts Restarting...
+[1] c🚀 Node.js Backend running on http://localhost:8000
+[1] 📁 Workspace: C:\Users\skyks\Desktop\AgentDashboard
+[1] 🌐 Providers: C:\Users\skyks\.gemini\antigravity\providers.json
+[1] ✅ Tnega Git Hooks installed successfully at .git/hooks/ (pre-commit, pre-push)
+[1] [Hooks System] Event "file.change" triggered. Running 0 hooks.
+[1] 18:13:01 [tsx] change in ./lib\codexInventory.ts Restarting...
+[1] c🚀 Node.js Backend running on http://localhost:8000
+[1] 📁 Workspace: C:\Users\skyks\Desktop\AgentDashboard
+[1] 🌐 Providers: C:\Users\skyks\.gemini\antigravity\providers.json
+[1] ✅ Tnega Git Hooks installed successfully at .git/hooks/ (pre-commit, pre-push)
+[1] [Hooks System] Event "file.change" triggered. Running 0 hooks.
+[1] 18:15:05 [tsx] change in ./server.ts Restarting...
+[1] c🚀 Node.js Backend running on http://localhost:8000
+[1] 📁 Workspace: C:\Users\skyks\Desktop\AgentDashboard
+[1] 🌐 Providers: C:\Users\skyks\.gemini\antigravity\providers.json
+[1] ✅ Tnega Git Hooks installed successfully at .git/hooks/ (pre-commit, pre-push)
+[1] 18:16:27 [tsx] change in ./server.ts Restarting...
+[1] c🚀 Node.js Backend running on http://localhost:8000
+[1] 📁 Workspace: C:\Users\skyks\Desktop\AgentDashboard
+[1] 🌐 Providers: C:\Users\skyks\.gemini\antigravity\providers.json
+[1] ✅ Tnega Git Hooks installed successfully at .git/hooks/ (pre-commit, pre-push)
+[1] 18:29:46 [tsx] change in ./server.ts Restarting...
+[1] c🚀 Node.js Backend running on http://localhost:8000
+[1] 📁 Workspace: C:\Users\skyks\Desktop\AgentDashboard
+[1] 🌐 Providers: C:\Users\skyks\.gemini\antigravity\providers.json
+[1] ✅ Tnega Git Hooks installed successfully at .git/hooks/ (pre-commit, pre-push)

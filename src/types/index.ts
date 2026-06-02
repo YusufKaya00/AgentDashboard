@@ -153,6 +153,7 @@ export interface CodexSkill {
   id: string;
   name: string;
   description: string;
+  instructions?: string;
   source: 'system' | 'plugin' | 'user';
   file_path: string;
   updated_at: string | null;

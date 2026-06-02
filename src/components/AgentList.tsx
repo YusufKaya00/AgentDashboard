@@ -85,7 +85,7 @@ export default function AgentList({ agents, onRefresh, showAll = false }: AgentL
 
     return (
       <div 
-        key={agent.id}
+        key={agent.config?.target_key || `${agent.runtime || 'agent'}:${agent.id}`}
         onClick={() => handleSelectAgent(agent)}
         className="group relative flex flex-col justify-between bg-zinc-900/40 hover:bg-zinc-900/80 border border-white/5 hover:border-primary/30 rounded-xl p-5 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_0_30px_rgba(139,92,246,0.06)]"
       >
@@ -143,6 +143,19 @@ export default function AgentList({ agents, onRefresh, showAll = false }: AgentL
 
         {/* Card Footer / Quick Actions */}
         <div className="flex items-center justify-end gap-2 mt-5 pt-3 border-t border-white/[0.03]">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSelectAgent(agent);
+            }}
+            className="p-1.5 rounded-lg border border-transparent hover:bg-primary/10 text-muted hover:text-primary transition-all"
+            title="Configure Agent"
+            aria-label={`Configure ${agent.name}`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          </button>
           {!isCoreService ? (
             <>
               <button 

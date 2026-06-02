@@ -37,11 +37,21 @@ app.use(express.json());
 const execAsync = promisify(exec);
 
 // ============ PATHS ============
-const ROOT_DIR = path.resolve(__dirname, process.env.WORKSPACE_DIR || '..');
-const CLAUDE_DIR = path.join(os.homedir(), '.gemini', 'antigravity');
+const resolveConfiguredPath = (value: string | undefined, fallback: string) => {
+  if (!value) return fallback;
+  return path.isAbsolute(value) ? path.resolve(value) : path.resolve(__dirname, value);
+};
+
+const HOME_DIR = resolveConfiguredPath(process.env.DASHBOARD_HOME_DIR, os.homedir());
+const ROOT_DIR = resolveConfiguredPath(process.env.WORKSPACE_DIR, path.resolve(__dirname, '..'));
+const ANTIGRAVITY_HOME = resolveConfiguredPath(process.env.ANTIGRAVITY_HOME, path.join(HOME_DIR, '.gemini', 'antigravity'));
+const CODEX_HOME = resolveConfiguredPath(process.env.CODEX_HOME, path.join(HOME_DIR, '.codex'));
+const CLAUDE_HOME = resolveConfiguredPath(process.env.CLAUDE_HOME, path.join(HOME_DIR, '.claude'));
+const LOCAL_CLAUDE_DIR = resolveConfiguredPath(process.env.DASHBOARD_CLAUDE_DIR, path.join(ROOT_DIR, '.claude'));
+const CLAUDE_DIR = ANTIGRAVITY_HOME;
 const SUBAGENTS_METADATA_FILE = path.join(CLAUDE_DIR, 'subagents.json');
 
-const localClaudeDir = path.join(ROOT_DIR, '.claude');
+const localClaudeDir = LOCAL_CLAUDE_DIR;
 // Ensure global directory structure exists
 fs.ensureDirSync(CLAUDE_DIR);
 fs.ensureDirSync(path.join(CLAUDE_DIR, 'agents'));
@@ -104,16 +114,15 @@ const CHAT_LOGS_FILE = path.join(DATA_DIR, 'chat_logs.json');
 const getAgentPaths = (runtime: string, id: string) => {
   if (runtime === 'claude') {
     return {
-      metadataFile: path.join(ROOT_DIR, '.claude', 'agents.json'),
-      promptFile: path.join(ROOT_DIR, '.claude', 'agents', `${id}.md`),
-      dir: path.join(ROOT_DIR, '.claude', 'agents')
+      metadataFile: path.join(LOCAL_CLAUDE_DIR, 'agents.json'),
+      promptFile: path.join(LOCAL_CLAUDE_DIR, 'agents', `${id}.md`),
+      dir: path.join(LOCAL_CLAUDE_DIR, 'agents')
     };
   } else if (runtime === 'codex') {
-    const codexHome = path.join(os.homedir(), '.codex');
     return {
-      metadataFile: path.join(codexHome, 'agents.json'),
-      promptFile: path.join(codexHome, 'agents', `${id}.md`),
-      dir: path.join(codexHome, 'agents')
+      metadataFile: path.join(CODEX_HOME, 'agents.json'),
+      promptFile: path.join(CODEX_HOME, 'agents', `${id}.md`),
+      dir: path.join(CODEX_HOME, 'agents')
     };
   } else {
     // Default to antigravity
@@ -147,8 +156,8 @@ const determineRuntime = (model: string, explicitRuntime?: string): string => {
 };
 
 const loadAllAgents = async () => {
-  const localClaudeAgentsFile = path.join(ROOT_DIR, '.claude', 'agents.json');
-  const codexAgentsFile = path.join(os.homedir(), '.codex', 'agents.json');
+  const localClaudeAgentsFile = path.join(LOCAL_CLAUDE_DIR, 'agents.json');
+  const codexAgentsFile = path.join(CODEX_HOME, 'agents.json');
 
   const [antigravityAgents, claudeAgents, codexAgents] = await Promise.all([
     readJson(AGENTS_METADATA_FILE, []),
@@ -277,6 +286,7 @@ const readJson = async (filePath: string, fallback: any = []) => {
 };
 
 const writeJson = async (filePath: string, data: any) => {
+  await fs.ensureDir(path.dirname(filePath));
   await fs.writeJson(filePath, data, { spaces: 2 });
 };
 
@@ -299,7 +309,7 @@ const getMergedModels = async () => {
     provider: m.provider || 'custom'
   })) : [];
 
-  const claudeCacheFile = path.join(os.homedir(), '.claude', 'cache', 'gateway-models.json');
+  const claudeCacheFile = path.join(CLAUDE_HOME, 'cache', 'gateway-models.json');
   let claudeList: any[] = [];
   try {
     if (await fs.pathExists(claudeCacheFile)) {
@@ -321,7 +331,7 @@ const getMergedModels = async () => {
     console.error('[Models Cache] Error reading Claude models:', err);
   }
 
-  const codexCacheFile = path.join(os.homedir(), '.codex', 'models_cache.json');
+  const codexCacheFile = path.join(CODEX_HOME, 'models_cache.json');
   let codexList: any[] = [];
   try {
     if (await fs.pathExists(codexCacheFile)) {
@@ -403,7 +413,7 @@ const normalizeSkill = (skill: any) => {
 };
 
 const getAIControlPlaneOverview = async () => {
-  const localSkillsFile = path.join(ROOT_DIR, '.claude', 'skills.json');
+  const localSkillsFile = path.join(LOCAL_CLAUDE_DIR, 'skills.json');
   const [agents, geminiSkills, localClaudeSkills, models, providers, assignments, codexInventory, subagents] = await Promise.all([
     loadAllAgents(),
     readJson(SKILLS_FILE, []),
@@ -411,7 +421,7 @@ const getAIControlPlaneOverview = async () => {
     getMergedModels(),
     readJson(PROVIDERS_FILE, []),
     readJson(SKILL_ASSIGNMENTS_FILE, []),
-    getCodexInventory({ codexHome: path.join(os.homedir(), '.codex'), workspaceDir: ROOT_DIR }),
+    getCodexInventory({ codexHome: CODEX_HOME, workspaceDir: ROOT_DIR }),
     getAntigravitySubagents(),
   ]);
 
@@ -625,7 +635,7 @@ const AGENTS_METADATA_FILE = path.join(DATA_DIR, 'agents.json');
 const initGlobalSkills = async () => {
   await fs.ensureDir(CLAUDE_DIR);
   // Ensure default models.json etc if not exists
-  const localSkillsFile = path.join(ROOT_DIR, '.claude', 'skills.json');
+  const localSkillsFile = path.join(LOCAL_CLAUDE_DIR, 'skills.json');
   if (fs.existsSync(localSkillsFile) && !fs.existsSync(SKILLS_FILE)) {
     fs.copySync(localSkillsFile, SKILLS_FILE);
   }
@@ -765,7 +775,16 @@ const initAgents = async () => {
   }
   if (changed) await writeJson(AGENTS_METADATA_FILE, agents);
 };
-initAgents();
+const startupPromise = initAgents();
+
+app.use(async (_req, _res, next) => {
+  try {
+    await startupPromise;
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 const installGitHooks = async () => {
   const gitHooksDir = path.join(ROOT_DIR, '.git', 'hooks');
@@ -814,8 +833,7 @@ app.get('/api/agents/summary', async (_req, res) => {
   ]);
   let codexAgents: any[] = [];
   try {
-    const codexHome = path.join(os.homedir(), '.codex');
-    const inventory = await getCodexInventory({ codexHome, workspaceDir: ROOT_DIR });
+    const inventory = await getCodexInventory({ codexHome: CODEX_HOME, workspaceDir: ROOT_DIR });
     codexAgents = inventory.agents || [];
   } catch {}
 
@@ -1061,7 +1079,7 @@ app.post('/api/skills', async (req, res) => {
   const skill = normalizeSkill({ id, ...req.body, enabled: true, active: true });
 
   if (requestedSource === 'codex' || requestedSource === 'codex-user') {
-    const skillDir = path.join(os.homedir(), '.codex', 'skills', id);
+    const skillDir = path.join(CODEX_HOME, 'skills', id);
     await fs.ensureDir(skillDir);
     await fs.writeFile(
       path.join(skillDir, 'SKILL.md'),
@@ -1073,7 +1091,7 @@ app.post('/api/skills', async (req, res) => {
   }
 
   const targetFile = requestedSource === 'claude'
-    ? path.join(ROOT_DIR, '.claude', 'skills.json')
+    ? path.join(LOCAL_CLAUDE_DIR, 'skills.json')
     : SKILLS_FILE;
   const skills = await readJson(targetFile, []);
   const nextSkills = Array.isArray(skills) ? skills.filter((item: any) => item.id !== id) : [];
@@ -1762,7 +1780,7 @@ ${instructions || skill.description || 'No skill instructions provided.'}
 
 const syncCodexSkills = async (assignments: any[], skills: any[], effectiveCodexSkillKeys: Set<string> = new Set()) => {
   try {
-    const codexSkillsDir = path.join(os.homedir(), '.codex', 'skills');
+    const codexSkillsDir = path.join(CODEX_HOME, 'skills');
     await fs.ensureDir(codexSkillsDir);
 
     const codexAssignments = assignments.filter((a: any) => a.target_key.startsWith('codex_agent:'));
@@ -1807,7 +1825,7 @@ const syncRuntimeSkillFiles = async (assignments: any[], skills: any[]) => {
   const runtimeTargets = [
     { prefix: 'antigravity_agent:', dir: path.join(CLAUDE_DIR, 'skills') },
     { prefix: 'subagent:', dir: path.join(CLAUDE_DIR, 'skills') },
-    { prefix: 'claude_agent:', dir: path.join(ROOT_DIR, '.claude', 'skills') },
+    { prefix: 'claude_agent:', dir: path.join(LOCAL_CLAUDE_DIR, 'skills') },
   ];
 
   for (const target of runtimeTargets) {
@@ -1819,7 +1837,7 @@ const syncRuntimeSkillFiles = async (assignments: any[], skills: any[]) => {
     );
 
     for (const skill of skills) {
-      if (!assignedSkillKeys.has(skill.skill_key) || String(skill.skill_key || '').startsWith('codex-')) continue;
+      if (!assignedSkillKeys.has(skill.skill_key)) continue;
       const skillDir = path.join(target.dir, skillFolderName(skill.skill_key));
       await fs.ensureDir(skillDir);
       await fs.writeFile(path.join(skillDir, 'SKILL.md'), renderDashboardSkillMarkdown(skill), 'utf-8');
@@ -1838,7 +1856,7 @@ const syncRuntimeSkillFiles = async (assignments: any[], skills: any[]) => {
 
 const syncAgentCapabilities = async (assignments: any[]) => {
   try {
-    const localSkillsFile = path.join(ROOT_DIR, '.claude', 'skills.json');
+    const localSkillsFile = path.join(LOCAL_CLAUDE_DIR, 'skills.json');
     const [geminiSkills, claudeSkills, agents, models, providers] = await Promise.all([
       readJson(SKILLS_FILE, []),
       readJson(localSkillsFile, []),
@@ -1849,8 +1867,7 @@ const syncAgentCapabilities = async (assignments: any[]) => {
 
     let codexSkills: any[] = [];
     try {
-      const codexHome = path.join(os.homedir(), '.codex');
-      const inventory = await getCodexInventory({ codexHome, workspaceDir: ROOT_DIR });
+      const inventory = await getCodexInventory({ codexHome: CODEX_HOME, workspaceDir: ROOT_DIR });
       codexSkills = inventory.skills?.items || [];
     } catch {}
 
@@ -1994,8 +2011,8 @@ const syncAgentCapabilities = async (assignments: any[]) => {
 
       await Promise.all([
         writeJson(AGENTS_METADATA_FILE, stripRuntime(antigravityGroup)),
-        writeJson(path.join(ROOT_DIR, '.claude', 'agents.json'), stripRuntime(claudeGroup)),
-        writeJson(path.join(os.homedir(), '.codex', 'agents.json'), stripRuntime(codexGroup))
+        writeJson(path.join(LOCAL_CLAUDE_DIR, 'agents.json'), stripRuntime(claudeGroup)),
+        writeJson(path.join(CODEX_HOME, 'agents.json'), stripRuntime(codexGroup))
       ]);
       console.log('[Capabilities Sync] Successfully updated all metadata files.');
     }
@@ -2037,8 +2054,7 @@ app.put('/api/ai/skills/:skillKey/assignments', async (req, res) => {
 // ============ CODEX OBSERVABILITY ============
 app.get('/api/codex/overview', async (_req, res) => {
   try {
-    const codexHome = path.join(os.homedir(), '.codex');
-    const inventory = await getCodexInventory({ codexHome, workspaceDir: ROOT_DIR });
+    const inventory = await getCodexInventory({ codexHome: CODEX_HOME, workspaceDir: ROOT_DIR });
     res.json(inventory);
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Failed to inspect Codex runtime' });
@@ -2048,7 +2064,7 @@ app.get('/api/codex/overview', async (_req, res) => {
 // ============ ANTIGRAVITY OBSERVABILITY ============
 app.get('/api/antigravity/overview', async (_req, res) => {
   try {
-    const geminiHome = path.join(os.homedir(), '.gemini', 'antigravity');
+    const geminiHome = ANTIGRAVITY_HOME;
     const files = ['mcp_config.json', 'antigravity_state.pbtxt', 'user_settings.pb', 'agents/antigravity.md'];
     
     const fileSummaries = await Promise.all(
@@ -2079,8 +2095,8 @@ app.get('/api/antigravity/overview', async (_req, res) => {
 // ============ CLAUDE OBSERVABILITY ============
 app.get('/api/claude/overview', async (_req, res) => {
   try {
-    const claudeHome = path.join(os.homedir(), '.claude');
-    const localClaude = path.join(ROOT_DIR, '.claude');
+    const claudeHome = CLAUDE_HOME;
+    const localClaude = LOCAL_CLAUDE_DIR;
     const available = await fs.pathExists(localClaude);
     
     const configFiles = ['agents.json', 'models.json', 'hooks.json', 'skills.json', 'tasks.json'];
@@ -2126,8 +2142,7 @@ app.get('/api/claude/overview', async (_req, res) => {
 
 // ============ CLI SESSION READER ============
 const getClaudeSessionsDir = () => {
-  const home = os.homedir();
-  const claudeDir = path.join(home, '.claude', 'projects');
+  const claudeDir = path.join(CLAUDE_HOME, 'projects');
   
   // Normalize the path for matching
   const absoluteRoot = path.resolve(ROOT_DIR);
@@ -2156,10 +2171,9 @@ const getClaudeSessionsDir = () => {
 };
 
 const getAntigravitySessionsDirs = () => {
-  const home = os.homedir();
   return [
-    path.join(home, '.gemini', 'antigravity', 'brain'),
-    path.join(home, '.gemini', 'antigravity-cli', 'brain')
+    path.join(ANTIGRAVITY_HOME, 'brain'),
+    path.join(path.dirname(ANTIGRAVITY_HOME), 'antigravity-cli', 'brain')
   ].filter(d => fs.existsSync(d));
 };
 
@@ -2167,8 +2181,7 @@ const getAntigravitySessionsDir = (): string => {
   const dirs = getAntigravitySessionsDirs();
   const firstDir = dirs[0];
   if (firstDir !== undefined) return firstDir;
-  const home = os.homedir();
-  return path.join(home, '.gemini', 'antigravity', 'brain');
+  return path.join(ANTIGRAVITY_HOME, 'brain');
 };
 
 const getAntigravityActivities = (): any[] => {

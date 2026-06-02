@@ -17,7 +17,7 @@ describe('getCodexInventory', () => {
 
     await fs.writeFile(
       path.join(tempDir, 'skills', '.system', 'imagegen', 'SKILL.md'),
-      '---\nname: imagegen\ndescription: Generate raster images\n---\n# Imagegen\n',
+      '---\nname: imagegen\ndescription: Generate raster images\n---\n# Imagegen\n\nUse raster output for generated visuals.\n',
       'utf-8'
     );
     await fs.writeFile(
@@ -65,6 +65,7 @@ describe('getCodexInventory', () => {
 
     assert.equal(inventory.runtime.name, 'Codex');
     assert.equal(inventory.skills.total, 2);
+    assert.match(inventory.skills.items.find((skill) => skill.name === 'imagegen')?.instructions || '', /Use raster output/);
     assert.deepEqual(inventory.skills.items.map((skill) => skill.name).sort(), [
       'imagegen',
       'systematic-debugging',

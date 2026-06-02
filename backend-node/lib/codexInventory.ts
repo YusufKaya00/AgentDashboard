@@ -10,6 +10,7 @@ export interface CodexSkillInfo {
   id: string;
   name: string;
   description: string;
+  instructions?: string;
   source: 'system' | 'plugin' | 'user';
   file_path: string;
   updated_at: string | null;
@@ -98,6 +99,8 @@ const readSkill = async (codexHome: string, filePath: string): Promise<CodexSkil
   try {
     const content = await fs.readFile(filePath, 'utf-8');
     const frontMatter = parseFrontMatter(content);
+    const bodyStart = content.startsWith('---') ? content.indexOf('\n---', 3) : -1;
+    const markdownBody = bodyStart === -1 ? content.trim() : content.slice(bodyStart + 4).trim();
     const dirName = path.basename(path.dirname(filePath));
     const stat = await fs.stat(filePath);
 
@@ -105,6 +108,7 @@ const readSkill = async (codexHome: string, filePath: string): Promise<CodexSkil
       id: frontMatter.name || dirName,
       name: frontMatter.name || dirName,
       description: frontMatter.description || 'No description available',
+      instructions: markdownBody,
       source: sourceForSkill(codexHome, filePath),
       file_path: filePath,
       updated_at: stat.mtime.toISOString(),
