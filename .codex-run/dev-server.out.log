@@ -1,0 +1,25 @@
+
+> claude-dashboard@0.1.0 dev
+> concurrently "next dev" "npm run dev --prefix backend-node"
+
+[1] 
+[1] > backend-node@1.0.0 dev
+[1] > tsx watch server.ts
+[1] 
+[0] ▲ Next.js 16.2.4 (Turbopack)
+[0] - Local:         http://localhost:3000
+[0] - Network:       http://172.21.185.123:3000
+[0] ✓ Ready in 645ms
+[0] ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+[0]  We detected multiple lockfiles and selected the directory of C:\Users\skyks\package-lock.json as the root directory.
+[0]  To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+[0]    See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+[0]  Detected additional lockfiles: 
+[0]    * C:\Users\skyks\Desktop\AgentDashboard\package-lock.json
+[0] 
+[1] 🚀 Node.js Backend running on http://localhost:8000
+[1] 📁 Workspace: C:\Users\skyks\Desktop\AgentDashboard
+[1] 🌐 Providers: C:\Users\skyks\.gemini\antigravity\providers.json
+[1] ✅ Tnega Git Hooks installed successfully at .git/hooks/ (pre-commit, pre-push)
+[0] 
+[1] [Hooks System] Event "file.change" triggered. Running 0 hooks.

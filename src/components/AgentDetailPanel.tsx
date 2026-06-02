@@ -26,6 +26,10 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
   const [detailsSaved, setDetailsSaved] = useState(false);
   
   const [error, setError] = useState<string | null>(null);
+  const [runMessage, setRunMessage] = useState('');
+  const [runExecute, setRunExecute] = useState(false);
+  const [runningAgent, setRunningAgent] = useState(false);
+  const [runResult, setRunResult] = useState<any | null>(null);
 
   // Form States
   const [name, setName] = useState(agent.name);
@@ -230,6 +234,33 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
     }
   };
 
+  const invokeAgent = async () => {
+    if (!runMessage.trim()) return;
+
+    setRunningAgent(true);
+    setRunResult(null);
+    try {
+      const result = await api.chat(
+        agent.id,
+        runMessage,
+        {
+          source: 'agent-detail-panel',
+          runtime,
+          model,
+        },
+        runExecute
+      );
+      setRunResult(result);
+    } catch (err: any) {
+      setRunResult({
+        success: false,
+        error: err.message || 'Agent invocation failed',
+      });
+    } finally {
+      setRunningAgent(false);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
@@ -423,6 +454,72 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
               <div className="glass-card bg-surface/30">
                 <div className="flex items-center justify-between mb-4">
                   <div>
+                    <h3 className="text-sm font-black text-white uppercase tracking-wider">Agent Invocation</h3>
+                    <p className="text-[9px] text-muted font-medium uppercase tracking-widest mt-0.5">
+                      Prompt preview or runtime CLI execution
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 text-[9px] font-black text-muted uppercase tracking-widest cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={runExecute}
+                      onChange={(e) => setRunExecute(e.target.checked)}
+                      className="w-4 h-4 accent-[var(--primary)]"
+                    />
+                    Execute CLI
+                  </label>
+                </div>
+
+                <div className="space-y-3">
+                  <textarea
+                    value={runMessage}
+                    onChange={(e) => setRunMessage(e.target.value)}
+                    className="textarea text-xs py-2 min-h-[92px]"
+                    placeholder="Give this agent a task..."
+                  />
+
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 text-[9px] text-muted font-mono uppercase tracking-widest truncate">
+                      Runtime: <span className="text-primary font-bold">{runtime}</span> | Model: <span className="text-primary font-bold">{model || 'unbound'}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={invokeAgent}
+                      disabled={runningAgent || !runMessage.trim()}
+                      className="btn btn-sm btn-primary px-4 py-2 font-black uppercase tracking-wider text-[10px] shrink-0"
+                    >
+                      {runningAgent ? 'Running...' : runExecute ? 'Run Agent' : 'Prepare Prompt'}
+                    </button>
+                  </div>
+
+                  {runResult && (
+                    <div className={`rounded-xl border p-3 text-xs animate-fade-in ${
+                      runResult.success === false
+                        ? 'border-error/30 bg-error/10 text-red-200'
+                        : 'border-primary/20 bg-zinc-950/70 text-zinc-200'
+                    }`}>
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-muted">
+                          {runResult.dry_run ? 'Dry Run Result' : runResult.success === false ? 'Execution Error' : 'Execution Result'}
+                        </span>
+                        {runResult.command_preview && (
+                          <span className="text-[9px] font-mono text-zinc-500 truncate max-w-[320px]">
+                            {runResult.command_preview}
+                          </span>
+                        )}
+                      </div>
+                      <pre className="max-h-52 overflow-auto custom-scrollbar whitespace-pre-wrap break-words text-[10px] leading-relaxed font-mono">
+                        {runResult.output || runResult.error || runResult.prompt || JSON.stringify(runResult, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* SECTION 4: Skills Checklist matrix */}
+              <div className="glass-card bg-surface/30">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
                     <h3 className="text-sm font-black text-white uppercase tracking-wider">Capabilities & Skills Matrix</h3>
                     <p className="text-[9px] text-muted font-medium uppercase tracking-widest mt-0.5">Toggle agent tool permissions</p>
                   </div>
@@ -478,7 +575,7 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
                 </div>
               </div>
 
-              {/* SECTION 4: Create and Assign Skill */}
+              {/* SECTION 5: Create and Assign Skill */}
               <div className="glass-card border-primary/20 bg-primary/5">
                 <div className="mb-4">
                   <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">

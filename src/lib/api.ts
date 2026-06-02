@@ -57,11 +57,11 @@ export const api = {
   },
 
   // Chat
-  chat: async (agentId: string, message: string, context: any = {}): Promise<any> => {
+  chat: async (agentId: string, message: string, context: any = {}, execute = false): Promise<any> => {
     const res = await fetch(`${API_BASE}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agent_id: agentId, message, context }),
+      body: JSON.stringify({ agent_id: agentId, message, context, execute }),
     });
     return res.json();
   },
@@ -71,11 +71,11 @@ export const api = {
   },
 
   // Agent-to-Agent
-  callAgent: async (fromAgentId: string, toAgentId: string, task: string, context: any = {}): Promise<any> => {
+  callAgent: async (fromAgentId: string, toAgentId: string, task: string, context: any = {}, execute = false): Promise<any> => {
     const res = await fetch(`${API_BASE}/agents/call`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from_agent_id: fromAgentId, to_agent_id: toAgentId, task, context }),
+      body: JSON.stringify({ from_agent_id: fromAgentId, to_agent_id: toAgentId, task, context, execute }),
     });
     return res.json();
   },

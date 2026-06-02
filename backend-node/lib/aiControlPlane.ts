@@ -36,6 +36,17 @@ export interface DashboardProvider {
   active?: boolean;
 }
 
+export interface DashboardSubagent {
+  id: string;
+  name: string;
+  status?: string;
+  role?: string;
+  description?: string;
+  type?: string;
+  prompt?: string;
+  rules?: string;
+}
+
 export interface SkillAssignment {
   skill_key: string;
   skill_id: string;
@@ -75,7 +86,7 @@ export interface BuildTargetInput {
   codexAgents: CodexInventory['agents'];
   models: DashboardModel[];
   providers: DashboardProvider[];
-  subagents?: any[];
+  subagents?: DashboardSubagent[];
 }
 
 export interface ReplaceAssignmentRequest {

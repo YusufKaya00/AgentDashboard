@@ -18,6 +18,7 @@ import {
   type TargetType,
   type SkillSource,
 } from './lib/aiControlPlane.js';
+import { buildAgentExecutionPlan } from './lib/agentExecution.js';
 
 import 'dotenv/config';
 
@@ -97,6 +98,7 @@ const SKILLS_FILE = path.join(CLAUDE_DIR, 'skills.json');
 const ACTIVITIES_FILE = path.join(DATA_DIR, 'activities.json');
 const SKILL_ASSIGNMENTS_FILE = path.join(DATA_DIR, 'skill_assignments.json');
 const HOOK_HISTORY_FILE = path.join(DATA_DIR, 'hook_history.json');
+const CHAT_LOGS_FILE = path.join(DATA_DIR, 'chat_logs.json');
 
 // ============ MULTI-RUNTIME AGENTS HELPERS ============
 const getAgentPaths = (runtime: string, id: string) => {
@@ -877,6 +879,8 @@ app.post('/api/agents', async (req, res) => {
   
   if (Array.isArray(skills)) {
     await updateAgentSkills(id, runtime, skills);
+  } else {
+    await syncAgentCapabilities(await readJson(SKILL_ASSIGNMENTS_FILE, []));
   }
   
   logActivity('agent', `Agent created: ${name} (${runtime})`, id);
@@ -908,6 +912,8 @@ app.put('/api/agents/:id', async (req, res) => {
   
   if (Array.isArray(req.body.skills)) {
     await updateAgentSkills(req.params.id, runtime, req.body.skills);
+  } else {
+    await syncAgentCapabilities(await readJson(SKILL_ASSIGNMENTS_FILE, []));
   }
   
   logActivity('agent', `Agent updated: ${req.params.id} (${runtime})`, req.params.id);
@@ -1482,6 +1488,175 @@ app.post('/api/terminal/execute', async (req, res) => {
 
 app.get('/api/terminal/history', async (_req, res) => {
   res.json([]);
+});
+
+// ============ AGENT INVOCATION ============
+const appendChatLog = async (entry: any) => {
+  const logs = await readJson(CHAT_LOGS_FILE, []);
+  const nextLogs = Array.isArray(logs) ? logs : [];
+  nextLogs.push(entry);
+  await writeJson(CHAT_LOGS_FILE, nextLogs.slice(-500));
+};
+
+const buildExecutionPlanForAgent = async (agentId: string, message: string, context: Record<string, unknown> = {}) => {
+  const agents = await loadAllAgents();
+  const agent = agents.find((item: any) => item.id === agentId);
+  if (!agent) return null;
+
+  const assignments = await readJson(SKILL_ASSIGNMENTS_FILE, []);
+  await syncAgentCapabilities(Array.isArray(assignments) ? assignments : []);
+
+  const persona = await getAgentPromptFromRuntime(agent.runtime || 'antigravity', agent.id);
+  return buildAgentExecutionPlan({
+    agent,
+    persona,
+    message,
+    context,
+  });
+};
+
+const executeAgentPlan = async (plan: ReturnType<typeof buildAgentExecutionPlan>) => {
+  const { stdout, stderr } = await execAsync(plan.command_preview, {
+    cwd: ROOT_DIR,
+    timeout: 120000,
+    env: { ...process.env, DASHBOARD_AGENT_ID: plan.agent_id, DASHBOARD_AGENT_RUNTIME: plan.runtime },
+  });
+
+  return {
+    output: stdout || '',
+    error: stderr || null,
+  };
+};
+
+app.post('/api/chat', async (req, res) => {
+  try {
+    const agentId = String(req.body?.agent_id || '');
+    const message = String(req.body?.message || '');
+    const context = (req.body?.context && typeof req.body.context === 'object') ? req.body.context : {};
+    const execute = req.body?.execute === true;
+
+    if (!agentId || !message) {
+      return res.status(400).json({ error: 'agent_id and message are required' });
+    }
+
+    const plan = await buildExecutionPlanForAgent(agentId, message, context);
+    if (!plan) return res.status(404).json({ error: 'Agent not found' });
+
+    const logEntry: any = {
+      id: genId(),
+      agent_id: agentId,
+      type: 'request',
+      message,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        runtime: plan.runtime,
+        model: plan.model,
+        executed: execute,
+        command_preview: plan.command_preview,
+      },
+    };
+
+    if (!execute) {
+      logEntry.type = 'response';
+      logEntry.metadata.dry_run = true;
+      logEntry.metadata.prompt = plan.prompt;
+      await appendChatLog(logEntry);
+      await logActivity('chat', `Prepared agent invocation: ${agentId}`, agentId, { runtime: plan.runtime });
+      return res.json({
+        success: true,
+        dry_run: true,
+        agent_id: agentId,
+        runtime: plan.runtime,
+        model: plan.model,
+        prompt: plan.prompt,
+        command_preview: plan.command_preview,
+      });
+    }
+
+    try {
+      const result = await executeAgentPlan(plan);
+      logEntry.type = result.error ? 'error' : 'response';
+      logEntry.metadata.output = result.output;
+      logEntry.metadata.error = result.error;
+      await appendChatLog(logEntry);
+      await logActivity('chat', `Agent invocation completed: ${agentId}`, agentId, { runtime: plan.runtime });
+      return res.json({
+        success: !result.error,
+        agent_id: agentId,
+        runtime: plan.runtime,
+        model: plan.model,
+        output: result.output,
+        error: result.error,
+        command_preview: plan.command_preview,
+      });
+    } catch (error: any) {
+      logEntry.type = 'error';
+      logEntry.metadata.error = error.message || 'Agent execution failed';
+      await appendChatLog(logEntry);
+      await logActivity('error', `Agent invocation failed: ${agentId}`, agentId, { error: logEntry.metadata.error });
+      return res.status(500).json({
+        success: false,
+        agent_id: agentId,
+        runtime: plan.runtime,
+        error: logEntry.metadata.error,
+        command_preview: plan.command_preview,
+        prompt: plan.prompt,
+      });
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Failed to invoke agent' });
+  }
+});
+
+app.get('/api/chat/:agentId', async (req, res) => {
+  const logs = await readJson(CHAT_LOGS_FILE, []);
+  const limit = parseInt(req.query.limit as string) || 50;
+  res.json((Array.isArray(logs) ? logs : []).filter((entry: any) => entry.agent_id === req.params.agentId).slice(-limit));
+});
+
+app.get('/api/chats/all', async (req, res) => {
+  const logs = await readJson(CHAT_LOGS_FILE, []);
+  const limit = parseInt(req.query.limit as string) || 100;
+  res.json((Array.isArray(logs) ? logs : []).slice(-limit));
+});
+
+app.post('/api/agents/call', async (req, res) => {
+  try {
+    const { from_agent_id, to_agent_id, task, context } = req.body || {};
+    const execute = req.body?.execute === true;
+    if (!from_agent_id || !to_agent_id || !task) {
+      return res.status(400).json({ error: 'from_agent_id, to_agent_id, and task are required' });
+    }
+
+    const message = `Request from agent ${from_agent_id}:\n\n${task}`;
+    const plan = await buildExecutionPlanForAgent(to_agent_id, message, { ...(context || {}), from_agent_id });
+    if (!plan) return res.status(404).json({ error: 'Target agent not found' });
+
+    if (!execute) {
+      return res.json({
+        success: true,
+        dry_run: true,
+        from_agent_id,
+        to_agent_id,
+        runtime: plan.runtime,
+        prompt: plan.prompt,
+        command_preview: plan.command_preview,
+      });
+    }
+
+    const result = await executeAgentPlan(plan);
+    return res.json({
+      success: !result.error,
+      from_agent_id,
+      to_agent_id,
+      runtime: plan.runtime,
+      output: result.output,
+      error: result.error,
+      command_preview: plan.command_preview,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to call agent' });
+  }
 });
 
 // ============ HEALTH ============

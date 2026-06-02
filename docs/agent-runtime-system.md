@@ -11,6 +11,7 @@ This document describes what the dashboard actually does today. It is not a targ
 - Agent fields mostly match the pasted flow: name, description, instructions/prompt, model, and skills/tools.
 - Dashboard-created skills can now be created as Gemini/Antigravity, Claude dashboard, or Codex user skills.
 - Skill assignment works across runtimes as assignment metadata, agent capability updates, persona prompt injection, and dashboard-managed `SKILL.md` export where a runtime has a local skill directory.
+- Agent invocation is wired through `/api/chat` and `/api/agents/call`; the runtime command prompt is built from the saved agent persona plus assigned skill instructions.
 - Native runtime support is still uneven: dashboard-created skills assigned to Codex are exported as Codex `SKILL.md`; Gemini/Antigravity and Claude receive dashboard-managed skill markdown plus prompt injection, but this is not the same as a verified native tool loader.
 - Codex-created agents are written under `C:\Users\skyks\.codex` only when the selected model resolves to Codex.
 - Gemini/Antigravity-created agents are written under `C:\Users\skyks\.gemini\antigravity`.
@@ -187,6 +188,40 @@ The injected prompt block uses:
 <!-- DASHBOARD_SKILLS_END -->
 ```
 
+## Agent Invocation
+
+The dashboard API has a real invocation path:
+
+| Endpoint | Behavior |
+| --- | --- |
+| `POST /api/chat` | Builds an agent execution prompt from the saved runtime persona file, dashboard-assigned skills, optional context, and user message. |
+| `GET /api/chat/:agentId` | Returns persisted dashboard chat/invocation logs for one agent. |
+| `GET /api/chats/all` | Returns recent dashboard chat/invocation logs. |
+| `POST /api/agents/call` | Builds the same execution prompt for agent-to-agent calls. |
+
+The AgentDetailPanel now exposes this path in the dashboard. The "Agent Invocation" section lets you type a task for the selected agent, preview the exact runtime prompt by default, or explicitly enable CLI execution. The preview mode is the safe default because it confirms persona plus assigned skill injection without spending tokens or launching an external CLI.
+
+`POST /api/chat` accepts:
+
+```json
+{
+  "agent_id": "agent-id",
+  "message": "User task",
+  "context": {},
+  "execute": false
+}
+```
+
+When `execute` is `false`, the endpoint returns the exact prompt and command preview without launching a CLI. When `execute` is `true`, it runs:
+
+| Runtime | Command |
+| --- | --- |
+| `codex` | `codex run "<prompt>"` |
+| `claude` | `claude -p "<prompt>"` |
+| `antigravity` | `antigravity "<prompt>"` |
+
+This proves the dashboard-created agent can be invoked with its assigned skill instructions. Actual model response still depends on the matching CLI being installed and authenticated on the machine.
+
 ## Cross-Runtime Skill Reality
 
 | Assignment | Current behavior | Native runtime behavior |
@@ -254,7 +289,7 @@ Checked on 2026-06-02:
 ## Known Gaps To Fix
 
 1. Decide whether `.claude/data/skill_assignments.json` is obsolete or should be resynced from `C:\Users\skyks\.gemini\antigravity\data\skill_assignments.json`.
-2. Add focused tests for `syncAgentCapabilities()` and dashboard-managed `SKILL.md` export.
+2. Broaden direct tests for `syncAgentCapabilities()` edge cases and dashboard-managed `SKILL.md` export cleanup.
 3. Add real Codex live subagent/session parsing if those should appear in the Codex screen without being persisted as Codex agents.
 4. Add native runtime adapters if cross-runtime skill assignment should execute provider-specific tools, not just inject instructions and managed skill markdown.
 
@@ -263,6 +298,8 @@ Checked on 2026-06-02:
 A future documentation-maintenance skill should read only these high-signal files first:
 
 - `backend-node/server.ts`
+- `backend-node/lib/agentExecution.ts`
+- `backend-node/agentExecution.test.ts`
 - `backend-node/lib/aiControlPlane.ts`
 - `backend-node/lib/codexInventory.ts`
 - `src/components/AgentModal.tsx`
@@ -301,11 +338,22 @@ npx tsc --noEmit --project backend-node\tsconfig.json
 npm run build
 ```
 
+Also ran an isolated API smoke test with a temporary HOME/USERPROFILE:
+
+- Created a Gemini dashboard skill with instruction `E2E_SKILL_INSTRUCTION_MUST_APPEAR`.
+- Created a Codex runtime agent with that skill assigned.
+- Called `POST /api/chat` with `execute: false`.
+- Verified the generated invocation prompt included the skill instruction.
+- Verified the Codex agent prompt file existed.
+- Verified the exported Codex dashboard skill file existed.
+
 Result:
 
-- 5 backend tests passed.
+- 7 backend tests passed.
 - `aiControlPlane` tests passed.
 - `codexInventory` tests passed.
+- `agentExecution` tests passed.
 - Root TypeScript passed.
 - Backend TypeScript passed.
 - Next production build passed.
+- API smoke test passed.

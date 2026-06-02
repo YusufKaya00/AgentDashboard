@@ -114,6 +114,7 @@ export interface ChatRequest {
   message: string;
   context?: Record<string, any>;
   tools?: string[];
+  execute?: boolean;
 }
 
 export interface AgentCallRequest {
@@ -121,6 +122,7 @@ export interface AgentCallRequest {
   to_agent_id: string;
   task: string;
   context?: Record<string, any>;
+  execute?: boolean;
 }
 
 export interface Skill {
