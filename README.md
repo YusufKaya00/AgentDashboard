@@ -12,12 +12,26 @@ It unifies disparate agent ecosystems into a single visual dashboard, providing 
 
 ## ✨ Features & Capabilities
 
-### 🤖 1. Multi-Agent & Subagent Observability
-* **Centralized Dashboard**: View, inspect, and monitor all your active AI runtimes in a single unified interface.
-* **Subagent Telemetry**: Real-time listing and tracking of all active subagents (both static and dynamically spawned) running across Antigravity, Claude, and Codex.
-* **Model & Provider Management**: Monitor, toggle, and manage active models (including Google Gemini, Anthropic Claude, OpenAI, and custom local models) and their API providers from a central control panel.
+### 🤖 1. Categorized Agent Registry & Observability
+Tnega unifies disparate agent ecosystems into a single workspace, grouping active entities by their runtime namespaces:
+* **Categorized Columns**: Agents are grouped into three columns:
+  - **`.gemini` (Antigravity)**: Powered by Google Gemini models.
+  - **`.claude` (Claude Code)**: Powered by Anthropic Claude models.
+  - **`.codex` (Codex Engine)**: Powered by OpenAI/Codex reasoning engines.
+* **Premium Telemetry Cards**: Each agent card displays:
+  - **Active State Dot**: Real-time status dot (Green pulse for online/active, yellow for suspended, red for error).
+  - **Model Binding**: Displays the neural engine bound to the node.
+  - **Active Capability Badges**: Displays small badges representing equipped tools/skills.
+  - **Quick Inline Commands**: Suspend, resume, or decommission nodes directly from the registry view.
 
-### 🎛️ 2. Cross-Runtime Skill Assignment Matrix
+### 🎛️ 2. Slide-Over Identity & Configuration Drawer
+Clicking any agent card slides in an advanced configuration console from the right, providing E2E control:
+* **Identity Parameters**: Modify Agent Designation (Name), Description, Neural Model binding, and Operational status.
+* **Persona Prompt Markdown Editor**: Live system prompt editor connected directly to the agent's workspace file path (e.g. `.claude/agents/*.md`, `.gemini/antigravity/agents/*.md`, `.codex/agents/*.md`), featuring real-time line and character telemetry counters.
+* **Capabilities & Skills Matrix**: Checklist of unified system skills (grouped by origin runspaces) to instantly bind or unbind tool permissions.
+* **Dynamic Skill Equip**: An inline form to define a new tool skill (Designation, category, script path) and auto-equip it to the active agent instantly.
+
+### 🎛️ 3. Cross-Runtime Skill Assignment Matrix
 Tnega bridges the gap between different AI frameworks by normalizing capabilities into a unified catalog.
 * **Define Once, Run Anywhere**: Define a skill (capabilities, custom commands, or scripts) from any source—whether it's a Claude tool, a Codex system/user/plugin skill, or a Gemini capability.
 * **Flexible Assignment Matrix**: Map and assign those skills directly to any executor target:
@@ -26,12 +40,12 @@ Tnega bridges the gap between different AI frameworks by normalizing capabilitie
   - **Antigravity Core Agents & Dynamic Subagents**
   - **Specific Models & Providers** (assign capabilities directly to models/providers so any agent utilizing them inherits those skills)
 
-### 🔗 3. Event-Driven Hook Engine
+### 🔗 4. Event-Driven Hook Engine
 * **Git Hook Integration**: Automatically installs `.git/hooks/pre-commit` and `.git/hooks/pre-push` hooks when the backend server boots.
 * **Automated Review Workflows**: Setup automated tasks triggered on `git.push`, `git.commit`, or debounced `file.change` events.
 * **Auto-Review Execution**: On trigger, Tnega extracts the active `git diff` and passes it to your selected agent (Antigravity Core, Claude Code, or Codex Engine) with a customizable prompt (e.g., *"Audit changes for security, performance, and code quality"*), streaming output in real-time to the dashboard.
 
-### 📊 4. Telemetry, System Health & Background Tasks
+### 📊 5. Telemetry, System Health & Background Tasks
 * **Resource Telemetry**: Monitor CPU load, RAM usage, storage states, active agent status, and event feeds in real-time via WebSockets.
 * **Background Tasks & CLI Sessions**: Start, monitor, kill, and interact with running shell/CLI tasks and background agent processes directly from the UI terminal.
 
@@ -83,7 +97,7 @@ This command runs:
 
 1. **Register/Sync Skills**: The backend automatically scans local `.claude/skills.json`, the user's Codex home (`~/.codex/skills/`, `~/.codex/plugins/`), and Gemini settings.
 2. **Assign via Matrix**: Using the **Skills** matrix tab on the dashboard, select any skill and bind it to one or more targets (e.g., assign a Codex refactoring skill to a Claude subagent, or an Antigravity code search skill to a Codex primary agent).
-3. **Metadata Synchronization**: Tnega saves these cross-runtime assignments in `.claude/data/skill_assignments.json`. Runtimes automatically read this assignment metadata on execution to resolve dynamic skills.
+3. **Metadata Synchronization**: Tnega saves these cross-runtime assignments in the global `~/.gemini/antigravity/data/skill_assignments.json`. Runtimes automatically read this assignment metadata on execution to resolve dynamic skills.
 
 ---
 
