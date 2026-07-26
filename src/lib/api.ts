@@ -1,7 +1,33 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // API Client
-import type { AIControlPlaneOverview, AITarget, SkillAssignment } from '@/types';
+import type {
+  AIControlPlaneOverview,
+  AITarget,
+  AssignRuntimeSkillInput,
+  RuntimeAgentDefinition,
+  RuntimeAgentInput,
+  RuntimeId,
+  RuntimeOverview,
+  RuntimeSkillAssignmentResult,
+  RuntimeSkillDefinition,
+  RuntimeSkillInput,
+  SkillAssignment,
+  WritableRuntimeScope,
+} from '@/types';
 
 const API_BASE = 'http://127.0.0.1:8000/api';
+
+const requestJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
+  const response = await fetch(url, init);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = typeof payload?.error === 'string'
+      ? payload.error
+      : `Request failed with status ${response.status}`;
+    throw new Error(message);
+  }
+  return payload as T;
+};
 
 export const api = {
   // Agents
@@ -373,6 +399,83 @@ export const api = {
   getAntigravityOverview: async (): Promise<any> => {
     const res = await fetch(`${API_BASE}/antigravity/overview`);
     return res.json();
+  },
+
+  // Native runtime control plane
+  getRuntimeOverviews: async (): Promise<RuntimeOverview[]> => {
+    return requestJson<RuntimeOverview[]>(`${API_BASE}/runtimes`);
+  },
+  getRuntimeOverview: async (runtime: RuntimeId): Promise<RuntimeOverview> => {
+    return requestJson<RuntimeOverview>(`${API_BASE}/runtimes/${runtime}/overview`);
+  },
+  createRuntimeAgent: async (runtime: RuntimeId, agent: RuntimeAgentInput): Promise<RuntimeAgentDefinition> => {
+    return requestJson<RuntimeAgentDefinition>(`${API_BASE}/runtimes/${runtime}/agents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(agent),
+    });
+  },
+  updateRuntimeAgent: async (
+    runtime: RuntimeId,
+    scope: WritableRuntimeScope,
+    id: string,
+    agent: RuntimeAgentInput
+  ): Promise<RuntimeAgentDefinition> => {
+    return requestJson<RuntimeAgentDefinition>(
+      `${API_BASE}/runtimes/${runtime}/agents/${scope}/${encodeURIComponent(id)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(agent),
+      }
+    );
+  },
+  deleteRuntimeAgent: async (
+    runtime: RuntimeId,
+    scope: WritableRuntimeScope,
+    id: string
+  ): Promise<{ success: true; trash_path: string }> => {
+    return requestJson(`${API_BASE}/runtimes/${runtime}/agents/${scope}/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  },
+  createRuntimeSkill: async (runtime: RuntimeId, skill: RuntimeSkillInput): Promise<RuntimeSkillDefinition> => {
+    return requestJson<RuntimeSkillDefinition>(`${API_BASE}/runtimes/${runtime}/skills`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(skill),
+    });
+  },
+  updateRuntimeSkill: async (
+    runtime: RuntimeId,
+    scope: WritableRuntimeScope,
+    id: string,
+    skill: RuntimeSkillInput
+  ): Promise<RuntimeSkillDefinition> => {
+    return requestJson<RuntimeSkillDefinition>(
+      `${API_BASE}/runtimes/${runtime}/skills/${scope}/${encodeURIComponent(id)}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(skill),
+      }
+    );
+  },
+  deleteRuntimeSkill: async (
+    runtime: RuntimeId,
+    scope: WritableRuntimeScope,
+    id: string
+  ): Promise<{ success: true; trash_path: string }> => {
+    return requestJson(`${API_BASE}/runtimes/${runtime}/skills/${scope}/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  },
+  assignRuntimeSkill: async (assignment: AssignRuntimeSkillInput): Promise<RuntimeSkillAssignmentResult> => {
+    return requestJson<RuntimeSkillAssignmentResult>(`${API_BASE}/runtime-skill-assignments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(assignment),
+    });
   },
   getAntigravitySubagents: async (): Promise<any[]> => {
     const res = await fetch(`${API_BASE}/antigravity/subagents`);

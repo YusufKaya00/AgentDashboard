@@ -7,24 +7,38 @@ interface AgentSummaryProps {
   refreshTrigger?: number;
 }
 
+interface AgentSummaryData {
+  total: number;
+  status: {
+    active: number;
+    error: number;
+  };
+  models: Record<string, number>;
+}
+
 export default function AgentSummary({ refreshTrigger = 0 }: AgentSummaryProps) {
-  const [summary, setSummary] = useState<any>(null);
+  const [summary, setSummary] = useState<AgentSummaryData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadSummary();
-  }, [refreshTrigger]);
+    let cancelled = false;
 
-  const loadSummary = async () => {
-    try {
-      const data = await api.getAgentsSummary();
-      setSummary(data);
-    } catch (error) {
-      console.error('Error loading agent summary:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const loadSummary = async () => {
+      try {
+        const data = await api.getAgentsSummary();
+        if (!cancelled) setSummary(data);
+      } catch (error) {
+        console.error('Error loading agent summary:', error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void loadSummary();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTrigger]);
 
   if (loading) {
     return (
@@ -73,7 +87,7 @@ export default function AgentSummary({ refreshTrigger = 0 }: AgentSummaryProps) 
       <div className="flex-1 p-6 space-y-4">
         <p className="text-[10px] font-black text-muted uppercase tracking-[0.2em]">Neural Architectures</p>
         <div className="space-y-3">
-          {Object.entries(summary.models).map(([model, count]) => (
+          {Object.keys(summary.models).map((model) => (
             <div key={model} className="flex items-center justify-between group">
               <div className="flex items-center gap-3">
                 <div className="w-1.5 h-1.5 rounded-full bg-primary/40 group-hover:bg-primary transition-colors"></div>

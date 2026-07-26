@@ -1,6 +1,21 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
 import { useState, useEffect } from 'react';
+import {
+  CalendarDays,
+  ChevronDown,
+  ChevronUp,
+  ClipboardList,
+  Clock3,
+  Pencil,
+  Play,
+  Plus,
+  SquareTerminal,
+  Trash2,
+  UserRound,
+  X,
+} from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface Task {
@@ -45,11 +60,6 @@ export default function TaskManager() {
   const [expandedTasks, setExpandedTasks] = useState<string[]>([]);
   const [executingTaskId, setExecutingTaskId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadTasks();
-    loadStats();
-  }, []);
-
   const loadTasks = async () => {
     try {
       const data = await api.getTasks();
@@ -69,6 +79,11 @@ export default function TaskManager() {
       console.error('Error loading task stats:', error);
     }
   };
+
+  useEffect(() => {
+    void loadTasks();
+    void loadStats();
+  }, []);
 
   const handleCreate = () => {
     setSelectedTask(null);
@@ -195,9 +210,7 @@ export default function TaskManager() {
           onClick={handleCreate}
           className="btn btn-primary"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+          <Plus className="h-4 w-4" />
           Create Task
         </button>
       </div>
@@ -246,7 +259,7 @@ export default function TaskManager() {
         <div className="flex gap-2">
           <select
             value={filter}
-            onChange={(e) => setFilter(e.target.value as any)}
+            onChange={(e) => setFilter(e.target.value as typeof filter)}
             className="select w-auto"
           >
             <option value="all">All Status</option>
@@ -257,7 +270,7 @@ export default function TaskManager() {
           </select>
           <select
             value={priorityFilter}
-            onChange={(e) => setPriorityFilter(e.target.value as any)}
+            onChange={(e) => setPriorityFilter(e.target.value as typeof priorityFilter)}
             className="select w-auto"
           >
             <option value="all">All Priority</option>
@@ -272,7 +285,7 @@ export default function TaskManager() {
       {/* Task List */}
       {filteredTasks.length === 0 ? (
         <div className="glass-card p-12 text-center">
-          <div className="text-4xl mb-4 opacity-20">📋</div>
+          <ClipboardList className="mx-auto mb-4 h-10 w-10 text-zinc-700" />
           <p className="text-zinc-500">No tasks found</p>
         </div>
       ) : (
@@ -300,24 +313,31 @@ export default function TaskManager() {
                       </span>
                       {task.command && (
                         <span className="flex items-center gap-1 text-[9px] font-mono text-primary bg-primary/5 px-2 py-0.5 rounded border border-primary/20">
-                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
+                          <SquareTerminal className="h-2.5 w-2.5" />
                           {task.command}
                         </span>
                       )}
                     </div>
                     <p className="text-xs text-muted mb-3 line-clamp-2">{task.description}</p>
                     <div className="flex flex-wrap items-center gap-4 text-[10px] text-muted font-bold uppercase tracking-wider">
-                      <span>👤 {task.assigned_to}</span>
-                      <span>⏱️ {task.estimated_hours}h</span>
-                      <span>📅 {new Date(task.created_at).toLocaleDateString()}</span>
+                      <span className="flex items-center gap-1.5">
+                        <UserRound className="h-3 w-3" /> {task.assigned_to}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Clock3 className="h-3 w-3" /> {task.estimated_hours}h
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <CalendarDays className="h-3 w-3" /> {new Date(task.created_at).toLocaleDateString()}
+                      </span>
                       {task.command && (
                         <button
                           onClick={() => toggleExpandTask(task.id)}
                           className="text-[10px] text-primary hover:text-accent font-bold uppercase tracking-widest flex items-center gap-1 transition-colors"
                         >
-                          {isExpanded ? 'Hide Logs ▴' : 'Show Logs ▾'}
+                          {isExpanded ? 'Hide Logs' : 'Show Logs'}
+                          {isExpanded
+                            ? <ChevronUp className="h-3 w-3" />
+                            : <ChevronDown className="h-3 w-3" />}
                         </button>
                       )}
                     </div>
@@ -342,9 +362,7 @@ export default function TaskManager() {
                           </>
                         ) : (
                           <>
-                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
+                            <Play className="h-3 w-3" />
                             <span>{task.status === 'completed' ? 'Rerun' : 'Run'}</span>
                           </>
                         )}
@@ -362,15 +380,19 @@ export default function TaskManager() {
                     </select>
                     <button
                       onClick={() => handleEdit(task)}
-                      className="btn btn-ghost btn-sm"
+                      className="icon-button"
+                      title={`Edit ${task.title}`}
+                      aria-label={`Edit ${task.title}`}
                     >
-                      Edit
+                      <Pencil className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(task.id)}
-                      className="btn btn-ghost btn-sm text-red-500 hover:text-red-400"
+                      className="icon-button danger"
+                      title={`Delete ${task.title}`}
+                      aria-label={`Delete ${task.title}`}
                     >
-                      Delete
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
@@ -442,10 +464,13 @@ function TaskModal({ task, onSave, onClose }: TaskModalProps) {
           <h2 className="text-xl font-bold text-white">
             {task ? 'Edit Task' : 'Create Task'}
           </h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-white">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+          <button
+            onClick={onClose}
+            className="icon-button"
+            title="Close"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
           </button>
         </div>
 

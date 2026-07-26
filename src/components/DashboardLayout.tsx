@@ -1,6 +1,26 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import {
+  Activity,
+  BarChart3,
+  Bot,
+  Code2,
+  Cpu,
+  Gauge,
+  LayoutDashboard,
+  Link2,
+  ListChecks,
+  Menu,
+  Network,
+  Orbit,
+  PanelsTopLeft,
+  SquareTerminal,
+  Users,
+  Wrench,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 
 type DashboardTab = 'dashboard' | 'agents' | 'claude' | 'antigravity' | 'skills' | 'clisessions' | 'codex' | 'terminal' | 'tasks' | 'activity' | 'system' | 'hooks' | 'analytics' | 'models';
 
@@ -10,16 +30,10 @@ interface DashboardLayoutProps {
   onTabChange: (tab: DashboardTab) => void;
 }
 
-const Icon = ({ d }: { d: string }) => (
-  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-    <path d={d} />
-  </svg>
-);
-
 interface TabItem {
   id: DashboardTab;
   label: string;
-  icon: string;
+  icon: LucideIcon;
 }
 
 interface TabGroup {
@@ -27,119 +41,127 @@ interface TabGroup {
   items: TabItem[];
 }
 
+const GROUPS: TabGroup[] = [
+  {
+    title: 'Workspace',
+    items: [
+      { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+      { id: 'agents', label: 'Agent Registry', icon: Users },
+      { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+      { id: 'system', label: 'Diagnostics', icon: Gauge },
+    ],
+  },
+  {
+    title: 'Runtimes',
+    items: [
+      { id: 'codex', label: 'Codex', icon: Code2 },
+      { id: 'claude', label: 'Claude Code', icon: Bot },
+      { id: 'antigravity', label: 'Antigravity', icon: Orbit },
+    ],
+  },
+  {
+    title: 'Configuration',
+    items: [
+      { id: 'skills', label: 'Skills', icon: Wrench },
+      { id: 'models', label: 'Models', icon: Cpu },
+      { id: 'hooks', label: 'Hooks', icon: Link2 },
+    ],
+  },
+  {
+    title: 'Operations',
+    items: [
+      { id: 'tasks', label: 'Tasks', icon: ListChecks },
+      { id: 'terminal', label: 'Terminal', icon: SquareTerminal },
+      { id: 'clisessions', label: 'CLI Sessions', icon: PanelsTopLeft },
+      { id: 'activity', label: 'Activity', icon: Activity },
+    ],
+  },
+];
+
 export default function DashboardLayout({ children, activeTab, onTabChange }: DashboardLayoutProps) {
-  const groups: TabGroup[] = [
-    {
-      title: 'Overview & Analytics',
-      items: [
-        { id: 'dashboard', label: 'System Overview', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4' },
-        { id: 'analytics', label: 'Intelligence Analytics', icon: 'M7 12l3-3 3 3 4-4M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z' },
-        { id: 'system', label: 'System Telemetry', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924-1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' }
-      ]
-    },
-    {
-      title: 'Autonomous Cores',
-      items: [
-        { id: 'antigravity', label: 'Antigravity Core', icon: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z' },
-        { id: 'codex', label: 'Codex Engine', icon: 'M12 6V3m0 18v-3m6-6h3M3 12h3m10.95-4.95l2.12-2.12M4.93 19.07l2.12-2.12m0-9.9L4.93 4.93m14.14 14.14l-2.12-2.12M9 9h6v6H9z' },
-        { id: 'claude', label: 'Claude Code', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z' },
-        { id: 'agents', label: 'Agent Registry', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z' }
-      ]
-    },
-    {
-      title: 'Capabilities & Config',
-      items: [
-        { id: 'skills', label: 'Unified Capabilities', icon: 'M13 10V3L4 14h7v7l9-11h-7z' },
-        { id: 'models', label: 'Model Inventory', icon: 'M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 5h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2V7a2 2 0 012-2z' },
-        { id: 'hooks', label: 'System Hooks', icon: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1' }
-      ]
-    },
-    {
-      title: 'Operations & Executions',
-      items: [
-        { id: 'tasks', label: 'Orchestrator Tasks', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
-        { id: 'terminal', label: 'Command Terminal', icon: 'M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
-        { id: 'clisessions', label: 'CLI Session Hub', icon: 'M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
-        { id: 'activity', label: 'Activity Transmissions', icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' }
-      ]
-    }
-  ];
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const selectTab = (tab: DashboardTab) => {
+    onTabChange(tab);
+    setMobileOpen(false);
+  };
 
   return (
     <div className="dashboard-container">
-      {/* Background Glows */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-primary opacity-5 blur-[160px] rounded-full" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-accent opacity-5 blur-[140px] rounded-full" />
-      </div>
+      <button
+        className={`icon-button fixed top-3 z-[70] border-white/10 bg-[#101318] transition-[left] duration-200 md:hidden ${
+          mobileOpen ? 'left-[216px]' : 'left-3'
+        }`}
+        onClick={() => setMobileOpen((current) => !current)}
+        title={mobileOpen ? 'Close navigation' : 'Open navigation'}
+        aria-label={mobileOpen ? 'Close navigation' : 'Open navigation'}
+      >
+        {mobileOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+      </button>
 
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="p-6 mb-2 border-b border-white/[0.04]">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-primary to-accent rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20">
-              <svg className="w-7 h-7 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m0-12.728l.707.707m11.314 11.314l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z" />
-              </svg>
+      {mobileOpen && (
+        <button
+          className="fixed inset-0 z-40 bg-black/70 md:hidden"
+          onClick={() => setMobileOpen(false)}
+          aria-label="Close navigation"
+        />
+      )}
+
+      <aside className={`sidebar fixed inset-y-0 left-0 transition-transform duration-200 md:relative md:translate-x-0 ${
+        mobileOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}>
+        <div className="border-b border-white/[0.06] px-5 py-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-md border border-sky-400/25 bg-sky-400/10 text-sky-300">
+              <Network className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tight text-white leading-none uppercase">Tnega</h1>
-              <p className="text-[10px] text-muted font-black uppercase tracking-[0.2em] mt-1.5">Control Plane</p>
+              <h1 className="text-base font-semibold text-white">Tnega</h1>
+              <p className="mt-0.5 text-[10px] text-zinc-600">Agent runtime control</p>
             </div>
           </div>
         </div>
 
-        <nav className="sidebar-nav custom-scrollbar overflow-y-auto px-4 pb-6 flex-1 space-y-5">
-          {groups.map((group, idx) => (
-            <div key={idx} className="space-y-1.5">
-              <h2 className="px-3 text-[9px] font-black text-muted/40 uppercase tracking-[0.25em]">
-                {group.title}
-              </h2>
-              <div className="space-y-1">
+        <nav className="custom-scrollbar flex-1 space-y-5 overflow-y-auto px-3 py-4">
+          {GROUPS.map((group) => (
+            <section key={group.title}>
+              <h2 className="px-3 pb-1.5 text-[9px] font-semibold text-zinc-700">{group.title}</h2>
+              <div className="space-y-0.5">
                 {group.items.map((tab) => {
+                  const Icon = tab.icon;
                   const isActive = activeTab === tab.id;
                   return (
                     <button
                       key={tab.id}
-                      onClick={() => onTabChange(tab.id)}
-                      className={`nav-button group ${isActive ? 'active' : ''}`}
+                      onClick={() => selectTab(tab.id)}
+                      className={`nav-button ${isActive ? 'active' : ''}`}
                     >
-                      <div className={`${isActive ? 'text-primary' : 'text-white/30 group-hover:text-white/60 transition-colors'}`}>
-                        <Icon d={tab.icon} />
-                      </div>
-                      <span className="text-xs font-bold tracking-wide transition-all">
-                        {tab.label}
-                      </span>
+                      <Icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-primary' : 'text-zinc-600'}`} />
+                      <span className="truncate text-xs">{tab.label}</span>
                     </button>
                   );
                 })}
               </div>
-            </div>
+            </section>
           ))}
         </nav>
 
-        <div className="p-6 mt-auto border-t border-white/[0.03]">
-          <div className="p-4 bg-white/[0.01] rounded-2xl border border-white/[0.04] flex items-center gap-4 hover:bg-white/[0.03] transition-colors cursor-pointer">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-primary/20 to-accent/20 flex items-center justify-center text-xs font-bold text-white/50 border border-white/5 shadow-inner">
-              TN
+        <div className="border-t border-white/[0.06] p-4">
+          <div className="flex items-center gap-3 rounded-md border border-white/[0.06] bg-zinc-950/30 p-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-900 text-zinc-500">
+              <SquareTerminal className="h-4 w-4" />
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-bold text-white truncate">Main Session</div>
-              <div className="text-[10px] text-accent flex items-center gap-2 font-bold uppercase tracking-wider mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                Live
-              </div>
+            <div className="min-w-0">
+              <div className="truncate text-xs font-medium text-zinc-300">Local workspace</div>
+              <div className="mt-0.5 text-[10px] text-zinc-600">127.0.0.1 control plane</div>
             </div>
           </div>
         </div>
       </aside>
 
-      {/* SCROLLABLE Content Area - Guaranteed No Overlap */}
-      <main className="main-content">
+      <main className="main-content pt-14 md:pt-0">
         <div className="main-container">
-          <div className="animate-fade-in">
-            {children}
-          </div>
+          <div className="animate-fade-in">{children}</div>
         </div>
       </main>
     </div>

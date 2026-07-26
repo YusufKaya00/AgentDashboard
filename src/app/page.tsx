@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
 'use client';
 
 import { useState, useEffect } from 'react';
 import { api, connectWebSocket } from '@/lib/api';
-import { Agent, Hook, AIModel, ActivityLog, Stats, AITarget } from '@/types';
+import { Agent, Hook, AIModel, ActivityLog, RuntimeOverview } from '@/types';
 import DashboardLayout from '@/components/DashboardLayout';
 import AgentList from '@/components/AgentList';
 import ActivityFeed from '@/components/ActivityFeed';
@@ -16,20 +16,15 @@ import CLISessions from '@/components/CLISessions';
 import TaskManager from '@/components/TaskManager';
 import AnalyticsDashboard from '@/components/AnalyticsDashboard';
 import Terminal from '@/components/Terminal';
-import AIProviderManager from '@/components/AIProviderManager';
-import CLAUDEEditor from '@/components/CLAUDEEditor';
 import CodexControlPanel from '@/components/CodexControlPanel';
 import AntigravityControlPanel from '@/components/AntigravityControlPanel';
 import ClaudeControlPanel from '@/components/ClaudeControlPanel';
 
 const PageHeader = ({ title, subtitle, accent = "Intelligence" }: { title: string, subtitle: string, accent?: string }) => (
-  <div className="mb-8">
-    <div className="flex items-center gap-2 mb-1">
-      <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-      <span className="text-[10px] font-black text-primary uppercase tracking-[0.3em]">System {accent}</span>
-    </div>
-    <h1 className="text-3xl font-black text-white tracking-tight">
-      {title} <span className="text-muted font-light">{subtitle}</span>
+  <div className="mb-6">
+    <div className="mb-1 text-[10px] font-semibold text-zinc-600">{accent}</div>
+    <h1 className="text-2xl font-semibold text-white">
+      {title} <span className="font-normal text-zinc-500">{subtitle}</span>
     </h1>
   </div>
 );
@@ -37,64 +32,109 @@ const PageHeader = ({ title, subtitle, accent = "Intelligence" }: { title: strin
 type DashboardTab = 'dashboard' | 'agents' | 'claude' | 'antigravity' | 'skills' | 'clisessions' | 'codex' | 'terminal' | 'tasks' | 'activity' | 'system' | 'hooks' | 'analytics' | 'models';
 
 export default function Home() {
-  const [stats, setStats] = useState<Stats | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [hooks, setHooks] = useState<Hook[]>([]);
   const [models, setModels] = useState<AIModel[]>([]);
   const [activities, setActivities] = useState<ActivityLog[]>([]);
+  const [runtimeOverviews, setRuntimeOverviews] = useState<RuntimeOverview[]>([]);
+  const [runtimeConnection, setRuntimeConnection] = useState<'loading' | 'connected' | 'error'>('loading');
   const [activeTab, setActiveTab] = useState<DashboardTab>('dashboard');
 
-  const mapTargetsToAgents = (targets: AITarget[], assignments: any[] = []): Agent[] => {
-    return targets
-      .filter(t => t.type === 'claude_agent' || t.type === 'antigravity_agent' || t.type === 'codex_agent' || t.type === 'subagent')
-      .map(t => ({
-        id: t.id,
-        name: t.name,
-        description: (t.metadata.description as string) || (t.metadata.role as string) || (t.type === 'antigravity_agent' ? 'Autonomous Core Agent' : 'Sub-Agent Node'),
-        model: (t.metadata.model as string) || (t.type === 'codex_agent' ? 'Codex Engine' : 'N/A'),
-        status: t.status === 'active' || t.status === 'Online' || t.type === 'codex_agent' ? 'active' : (t.status === 'error' ? 'error' : 'inactive'),
-        config: { type: t.type, target_key: t.target_key },
-        created_at: '',
-        updated_at: '',
-        role: t.type === 'antigravity_agent' ? 'team_lead' : (t.type === 'codex_agent' ? 'specialist' : 'worker'),
-        capabilities: t.metadata.capabilities
-          ? (t.metadata.capabilities as string).split(',').filter(Boolean)
-          : (t.type === 'antigravity_agent' 
-             ? ['reasoning', 'planning', 'tools-exec'] 
-             : (t.type === 'codex_agent' ? ['codex-task', 'code-generation'] : ['chat', 'tool-call'])),
-        runtime: t.provider || (t.type === 'claude_agent' ? 'claude' : t.type === 'codex_agent' ? 'codex' : 'antigravity'),
-        skills: assignments
-          .filter((a: any) => a.target_key === t.target_key)
-          .map((a: any) => a.skill_key)
-      }));
+  const mapRuntimesToAgents = (overviews: RuntimeOverview[]): Agent[] => {
+    const mapped: Agent[] = [];
+    for (const overview of overviews) {
+      for (const thread of overview.threads) {
+        mapped.push({
+          id: `${overview.runtime.id}:thread:${thread.id}`,
+          name: thread.nickname || thread.title,
+          description: thread.is_subagent
+            ? `Subagent run${thread.role ? ` · ${thread.role}` : ''}`
+            : 'Runtime session',
+          model: thread.model || 'Runtime default',
+          status: thread.status === 'running'
+            ? 'active'
+            : thread.status === 'failed'
+              ? 'error'
+              : 'inactive',
+          config: {
+            type: 'runtime_thread',
+            runtime_id: overview.runtime.id,
+            thread_id: thread.id,
+            parent_id: thread.parent_id,
+          },
+          created_at: thread.created_at || '',
+          updated_at: thread.updated_at || '',
+          last_activity: thread.updated_at || undefined,
+          role: thread.is_subagent ? 'worker' : 'team_lead',
+          capabilities: [
+            thread.is_subagent ? 'subagent' : 'session',
+            thread.inferred ? 'observed' : 'native-index',
+          ],
+          skills: [],
+          runtime: overview.runtime.id,
+        });
+      }
+      for (const definition of overview.agents) {
+        mapped.push({
+          id: `${overview.runtime.id}:${definition.scope}:${definition.id}`,
+          name: definition.name,
+          description: definition.description || 'Native agent definition',
+          model: definition.model || 'Runtime default',
+          status: definition.scope === 'legacy' ? 'inactive' : 'active',
+          config: {
+            type: 'runtime_definition',
+            runtime_id: overview.runtime.id,
+            scope: definition.scope,
+            native_id: definition.id,
+            file_path: definition.file_path,
+            editable: definition.editable,
+          },
+          created_at: '',
+          updated_at: definition.updated_at || '',
+          role: definition.scope === 'builtin' ? 'specialist' : 'worker',
+          capabilities: ['definition', definition.scope],
+          skills: definition.skills,
+          runtime: overview.runtime.id,
+        });
+      }
+    }
+    return mapped;
   };
 
   const loadInitialData = async () => {
-    try {
-      const [statsData, targetsData, hooksData, modelsData, activitiesData, assignmentsData] = await Promise.all([
-        api.getStats(),
-        api.getAITargets(),
-        api.getHooks(),
-        api.getModels(),
-        api.getActivity(50),
-        api.getSkillAssignments().catch(() => []),
-      ]);
-      setStats(statsData);
-      setAgents(mapTargetsToAgents(targetsData, assignmentsData));
-      setHooks(Array.isArray(hooksData) ? hooksData : []);
-      setModels(Array.isArray(modelsData) ? modelsData : []);
-      setActivities(Array.isArray(activitiesData) ? activitiesData : []);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    }
-  };
+    setRuntimeConnection('loading');
+    const [runtimesResult, hooksResult, modelsResult, activitiesResult] = await Promise.allSettled([
+      api.getRuntimeOverviews(),
+      api.getHooks(),
+      api.getModels(),
+      api.getActivity(50),
+    ]);
 
-  const loadStats = async () => {
-    try {
-      const statsData = await api.getStats();
-      setStats(statsData);
-    } catch (error) {
-      console.error('Error loading stats:', error);
+    if (runtimesResult.status === 'fulfilled') {
+      setRuntimeOverviews(runtimesResult.value);
+      setAgents(mapRuntimesToAgents(runtimesResult.value));
+      setRuntimeConnection('connected');
+    } else {
+      setRuntimeConnection('error');
+      console.error('Error loading runtime inventory:', runtimesResult.reason);
+    }
+
+    if (hooksResult.status === 'fulfilled') {
+      setHooks(Array.isArray(hooksResult.value) ? hooksResult.value : []);
+    } else {
+      console.error('Error loading hooks:', hooksResult.reason);
+    }
+
+    if (modelsResult.status === 'fulfilled') {
+      setModels(Array.isArray(modelsResult.value) ? modelsResult.value : []);
+    } else {
+      console.error('Error loading models:', modelsResult.reason);
+    }
+
+    if (activitiesResult.status === 'fulfilled') {
+      setActivities(Array.isArray(activitiesResult.value) ? activitiesResult.value : []);
+    } else {
+      console.error('Error loading activity:', activitiesResult.reason);
     }
   };
 
@@ -104,7 +144,6 @@ export default function Home() {
     const ws = connectWebSocket((data) => {
       if (data.type === 'activity') {
         setActivities((prev) => [data.data, ...prev].slice(0, 100));
-        loadStats();
       }
     });
 
@@ -112,14 +151,14 @@ export default function Home() {
   }, []);
 
   const refreshAgents = async () => {
+    setRuntimeConnection('loading');
     try {
-      const [targetsData, assignmentsData] = await Promise.all([
-        api.getAITargets(),
-        api.getSkillAssignments().catch(() => []),
-      ]);
-      setAgents(mapTargetsToAgents(targetsData, assignmentsData));
-      loadStats();
+      const runtimesData = await api.getRuntimeOverviews();
+      setRuntimeOverviews(runtimesData);
+      setAgents(mapRuntimesToAgents(runtimesData));
+      setRuntimeConnection('connected');
     } catch (error) {
+      setRuntimeConnection('error');
       console.error('Error refreshing agents:', error);
     }
   };
@@ -132,46 +171,70 @@ export default function Home() {
   const refreshModels = async () => {
     const data = await api.getModels();
     setModels(data);
-    loadStats();
   };
 
   return (
     <DashboardLayout activeTab={activeTab} onTabChange={setActiveTab}>
       {activeTab === 'dashboard' && (
-        <div className="space-y-10 animate-fade-in">
+        <div className="space-y-8 animate-fade-in">
           {/* Dashboard Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <span className="text-[10px] font-black text-primary uppercase tracking-[0.4em]">Core Intelligence Unit</span>
-              </div>
-              <h1 className="text-4xl font-black text-white tracking-tighter">
-                Dashboard <span className="text-muted font-light">Overview</span>
+              <div className="mb-1 text-[10px] font-semibold text-zinc-600">Local agent runtimes</div>
+              <h1 className="text-3xl font-semibold text-white">
+                Runtime <span className="font-normal text-zinc-500">Overview</span>
               </h1>
             </div>
-            <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-xl border border-white/5 self-start">
-              <div className="px-4 py-2 bg-primary/10 rounded-lg border border-primary/20">
-                <span className="text-[10px] font-black text-primary uppercase tracking-widest">System v5.0</span>
-              </div>
-              <div className="px-4 py-2 bg-accent/10 rounded-lg border border-accent/20">
-                <span className="text-[10px] font-black text-accent uppercase tracking-widest">Operational</span>
-              </div>
+            <div className="flex items-center gap-2 rounded-md border border-white/10 bg-[#101318] px-3 py-2 text-xs text-zinc-400">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  runtimeConnection === 'connected'
+                    ? 'bg-emerald-400'
+                    : runtimeConnection === 'error'
+                      ? 'bg-rose-400'
+                      : 'bg-amber-300'
+                }`}
+              />
+              {runtimeConnection === 'connected'
+                ? 'Backend connected'
+                : runtimeConnection === 'error'
+                  ? 'Backend unavailable'
+                  : 'Loading runtimes'}
             </div>
           </div>
 
           {/* Quick Metrics Grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             {[
-              { label: "Active Cores", value: "3 Cores", desc: "Claude, Codex, Antigravity", color: "text-primary" },
-              { label: "Fleet Nodes", value: `${agents.length} Registered`, desc: "Claude sub-agents configured", color: "text-accent" },
-              { label: "Active Tasks", value: `${stats?.total_tasks || 0} Queued`, desc: "Orchestrator task lists", color: "text-warning" },
-              { label: "Diagnostic Health", value: "99.9% Optimal", desc: "All core engines online", color: "text-secondary" }
+              {
+                label: 'Detected Runtimes',
+                value: `${runtimeOverviews.filter((item) => item.runtime.available).length} / 3`,
+                desc: 'Codex, Claude, Antigravity',
+                color: 'text-sky-300',
+              },
+              {
+                label: 'Running Sessions',
+                value: `${runtimeOverviews.flatMap((item) => item.threads).filter((thread) => thread.status === 'running').length}`,
+                desc: 'Native and observed activity',
+                color: 'text-emerald-300',
+              },
+              {
+                label: 'Agent Definitions',
+                value: `${runtimeOverviews.reduce((total, item) => total + item.agents.length, 0)}`,
+                desc: 'Native and legacy inventory',
+                color: 'text-amber-300',
+              },
+              {
+                label: 'Diagnostics',
+                value: `${runtimeOverviews.flatMap((item) => item.diagnostics).filter((item) => item.level !== 'info').length}`,
+                desc: 'Warnings and errors',
+                color: 'text-rose-300',
+              },
             ].map((metric, i) => (
-              <div key={i} className="card p-5 bg-surface/20 border-border/80 backdrop-blur-sm hover:border-primary/30 transition-all group duration-300">
-                <span className="text-[9px] font-black text-muted uppercase tracking-[0.2em]">{metric.label}</span>
-                <div className={`text-2xl font-black ${metric.color} tracking-tight mt-2.5 mb-1`}>{metric.value}</div>
-                <p className="text-[10px] text-muted/70 font-semibold">{metric.desc}</p>
+              <div key={i} className="runtime-panel p-4">
+                <span className="text-[10px] font-medium text-zinc-600">{metric.label}</span>
+                <div className={`mt-2 text-2xl font-semibold ${metric.color}`}>{metric.value}</div>
+                <p className="mt-1 text-[10px] text-zinc-600">{metric.desc}</p>
               </div>
             ))}
           </div>

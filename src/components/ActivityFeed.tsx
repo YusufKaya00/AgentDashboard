@@ -24,7 +24,7 @@ export default function ActivityFeed({ activities, showAll = false }: ActivityFe
     try {
       const date = new Date(dateStr);
       return date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    } catch (e) { return '--:--:--'; }
+    } catch { return '--:--:--'; }
   };
 
   const validActivities = displayActivities.filter(a => a && a.message);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Link2, Plus, Trash2 } from 'lucide-react';
 import { Hook } from '@/types';
 import { api } from '@/lib/api';
 
@@ -11,12 +12,19 @@ interface HookListProps {
 
 export default function HookList({ hooks, onRefresh }: HookListProps) {
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    type: Hook['type'];
+    trigger: string;
+    action: string;
+    agent: NonNullable<Hook['agent']>;
+    enabled: boolean;
+  }>({
     name: '',
-    type: 'pre' as const,
+    type: 'pre',
     trigger: 'git.push',
     action: 'Review code changes for bugs',
-    agent: 'antigravity' as 'antigravity' | 'claude' | 'codex' | 'none',
+    agent: 'antigravity',
     enabled: true,
   });
 
@@ -56,18 +64,6 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
     }
   };
 
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'pre':
-        return 'bg-secondary/10 text-secondary border-secondary/30';
-      case 'post':
-        return 'bg-accent/10 text-accent border-accent/30';
-      case 'error':
-        return 'bg-error/10 text-error border-error/30';
-      default:
-        return 'bg-surface text-foreground-muted border-border';
-    }
-  };
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Header Section */}
@@ -80,12 +76,10 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
           </div>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={handleCreate}
           className="btn btn-primary"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
-          </svg>
+          <Plus className="h-4 w-4" />
           <span>Register Hook</span>
         </button>
       </div>
@@ -93,9 +87,7 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
       {!Array.isArray(hooks) || hooks.length === 0 ? (
         <div className="glass-card p-20 text-center border-dashed border-border">
           <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg className="w-10 h-10 text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-            </svg>
+            <Link2 className="h-10 w-10 text-muted" />
           </div>
           <h3 className="text-xl font-bold text-white mb-2">No Active Hooks Detected</h3>
           <p className="text-sm text-muted">Configure interception hooks to monitor or modify system event flows.</p>
@@ -112,7 +104,7 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-surface flex items-center justify-center border border-border group-hover:border-primary group-hover:bg-primary/10 transition-all">
-                      <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                      <Link2 className="h-5 w-5 text-primary" />
                     </div>
                     <div>
                       <h3 className="text-sm font-bold text-white tracking-tight group-hover:text-primary transition-colors">{hook.name}</h3>
@@ -150,10 +142,10 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
                   <button
                     onClick={() => handleDelete(hook.id)}
                     className="p-1.5 text-muted hover:text-error transition-colors"
+                    title={`Delete ${hook.name}`}
+                    aria-label={`Delete ${hook.name}`}
                   >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                    <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
@@ -186,7 +178,7 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
                 </label>
                 <select
                   value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as Hook['type'] })}
                   className="select"
                 >
                   <option value="pre">Pre (Before action)</option>
@@ -214,7 +206,10 @@ export default function HookList({ hooks, onRefresh }: HookListProps) {
                 </label>
                 <select
                   value={formData.agent}
-                  onChange={(e) => setFormData({ ...formData, agent: e.target.value as any })}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    agent: e.target.value as NonNullable<Hook['agent']>,
+                  })}
                   className="select"
                 >
                   <option value="antigravity">Antigravity Core</option>

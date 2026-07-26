@@ -21,19 +21,24 @@ export default function SystemStatus({ refreshTrigger = 0 }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadStatus();
-  }, [refreshTrigger]);
+    let cancelled = false;
 
-  const loadStatus = async () => {
-    try {
-      const data = await api.getSystemStatus();
-      setStatus(data);
-    } catch (e) {
-      console.error('Failed to load system status:', e);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const loadStatus = async () => {
+      try {
+        const data = await api.getSystemStatus();
+        if (!cancelled) setStatus(data);
+      } catch (error) {
+        console.error('Failed to load system status:', error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void loadStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTrigger]);
 
   const getStatusColor = (statusStr: string) => {
     switch (statusStr?.toLowerCase()) {

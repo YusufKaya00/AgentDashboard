@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // API Types
 export interface Agent {
   id: string;
@@ -260,4 +261,150 @@ export interface ClaudeOverview {
   config: {
     files: Array<{ name: string; exists: boolean; size: number; updated_at: string | null }>;
   };
+}
+
+export type RuntimeId = 'codex' | 'claude' | 'antigravity';
+export type RuntimeScope = 'builtin' | 'system' | 'plugin' | 'global' | 'project' | 'legacy';
+export type WritableRuntimeScope = 'global' | 'project';
+export type RuntimeThreadStatus = 'running' | 'idle' | 'completed' | 'failed' | 'archived' | 'unknown';
+
+export interface RuntimeAgentDefinition {
+  runtime: RuntimeId;
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  model: string | null;
+  scope: RuntimeScope;
+  file_path: string | null;
+  editable: boolean;
+  skills: string[];
+  tools: string[];
+  updated_at: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface RuntimeSkillDefinition {
+  runtime: RuntimeId;
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  scope: RuntimeScope;
+  file_path: string;
+  editable: boolean;
+  updated_at: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface RuntimeThread {
+  runtime: RuntimeId;
+  id: string;
+  parent_id: string | null;
+  title: string;
+  status: RuntimeThreadStatus;
+  workspace: string | null;
+  model: string | null;
+  role: string | null;
+  nickname: string | null;
+  source: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  tokens_used: number | null;
+  transcript_path: string | null;
+  is_subagent: boolean;
+  inferred: boolean;
+}
+
+export interface RuntimeThreadEdge {
+  parent_id: string;
+  child_id: string;
+  status: string;
+}
+
+export interface RuntimePaths {
+  home: string;
+  workspace: string;
+  agent_roots: {
+    global: string;
+    project: string;
+    legacy?: string;
+  };
+  skill_roots: {
+    global: string;
+    project: string;
+    system?: string;
+    plugin?: string;
+    compat_global?: string;
+    compat_project?: string;
+    legacy?: string;
+  };
+  session_roots: string[];
+  sqlite_home?: string;
+}
+
+export interface RuntimeOverview {
+  runtime: {
+    id: RuntimeId;
+    name: string;
+    available: boolean;
+    workspace_dir: string;
+    home_dir: string;
+  };
+  paths: RuntimePaths;
+  capabilities: {
+    definitions_read: boolean;
+    definitions_write: boolean;
+    skills_read: boolean;
+    skills_write: boolean;
+    sessions_read: boolean;
+    sessions_control: boolean;
+  };
+  agents: RuntimeAgentDefinition[];
+  skills: RuntimeSkillDefinition[];
+  threads: RuntimeThread[];
+  edges: RuntimeThreadEdge[];
+  diagnostics: Array<{
+    level: 'info' | 'warning' | 'error';
+    code: string;
+    message: string;
+  }>;
+}
+
+export interface RuntimeAgentInput {
+  id?: string;
+  name: string;
+  description?: string;
+  instructions: string;
+  model?: string | null;
+  scope: WritableRuntimeScope;
+  skills?: string[];
+  tools?: string[];
+}
+
+export interface RuntimeSkillInput {
+  id?: string;
+  name: string;
+  description?: string;
+  instructions: string;
+  scope: WritableRuntimeScope;
+}
+
+export interface AssignRuntimeSkillInput {
+  source_runtime: RuntimeId;
+  source_scope: RuntimeScope;
+  source_skill_id: string;
+  target_runtime: RuntimeId;
+  target_scope: WritableRuntimeScope;
+  target_agent_id: string;
+}
+
+export interface RuntimeSkillAssignmentResult {
+  source: RuntimeSkillDefinition;
+  installed_skill: RuntimeSkillDefinition;
+  target_agent: RuntimeAgentDefinition;
+  compatibility: 'native' | 'portable' | 'adapted';
+  warnings: string[];
+  installed_path: string;
+  assigned_at: string;
 }

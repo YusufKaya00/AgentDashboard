@@ -1,6 +1,29 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import {
+  BadgeCheck,
+  BarChart3,
+  Bot,
+  Bug,
+  ChartNoAxesCombined,
+  ChartNoAxesColumnIncreasing,
+  CircleCheckBig,
+  ClipboardList,
+  Clock3,
+  Code2,
+  Download,
+  Gauge,
+  GitCommitHorizontal,
+  GitPullRequest,
+  MessageSquare,
+  Rocket,
+  Server,
+  TrendingDown,
+  TrendingUp,
+  TriangleAlert,
+  type LucideIcon,
+} from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface AnalyticsData {
@@ -40,19 +63,22 @@ export default function AnalyticsDashboard() {
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('7d');
 
   useEffect(() => {
-    loadAnalytics();
+    let active = true;
+    const loadAnalytics = async () => {
+      try {
+        const result = await api.getAnalytics(timeRange);
+        if (active) setData(result);
+      } catch (error) {
+        console.error('Error loading analytics:', error);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void loadAnalytics();
+    return () => {
+      active = false;
+    };
   }, [timeRange]);
-
-  const loadAnalytics = async () => {
-    try {
-      const result = await api.getAnalytics(timeRange);
-      setData(result);
-    } catch (error) {
-      console.error('Error loading analytics:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const formatUptime = (uptime: number) => {
     if (uptime >= 99.9) return '99.9%';
@@ -83,7 +109,7 @@ export default function AnalyticsDashboard() {
   if (!data) {
     return (
       <div className="card p-12 text-center">
-        <div className="text-4xl mb-4 opacity-20">📊</div>
+        <BarChart3 className="mx-auto mb-4 h-10 w-10 text-zinc-700" />
         <p className="text-foreground-muted">No analytics data available</p>
       </div>
     );
@@ -113,27 +139,27 @@ export default function AnalyticsDashboard() {
       {/* Development Metrics */}
       <div>
         <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <span className="text-primary">💻</span> Development Metrics
+          <Code2 className="h-5 w-5 text-primary" /> Development Metrics
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <MetricCard
             label="Commits"
             value={data.development.commits}
-            icon="📝"
+            icon={GitCommitHorizontal}
             trend="+12%"
             positive
           />
           <MetricCard
             label="Pull Requests"
             value={data.development.pull_requests}
-            icon="🔀"
+            icon={GitPullRequest}
             trend="+5%"
             positive
           />
           <MetricCard
             label="Code Velocity"
             value={`${data.development.code_velocity}`}
-            icon="⚡"
+            icon={Gauge}
             trend="+8%"
             positive
             suffix=" LOC/day"
@@ -141,7 +167,7 @@ export default function AnalyticsDashboard() {
           <MetricCard
             label="Test Coverage"
             value={`${data.development.test_coverage}`}
-            icon="✅"
+            icon={BadgeCheck}
             trend="+2%"
             positive
             suffix="%"
@@ -149,14 +175,14 @@ export default function AnalyticsDashboard() {
           <MetricCard
             label="Bugs"
             value={data.development.bug_count}
-            icon="🐛"
+            icon={Bug}
             trend="-15%"
             positive
           />
           <MetricCard
             label="Deployments"
             value={data.development.deployment_frequency}
-            icon="🚀"
+            icon={Rocket}
             trend="+20%"
             positive
           />
@@ -166,7 +192,7 @@ export default function AnalyticsDashboard() {
       {/* System Metrics */}
       <div>
         <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <span className="text-accent">🖥️</span> System Metrics
+          <Server className="h-5 w-5 text-accent" /> System Metrics
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <ProgressBarCard
@@ -186,14 +212,14 @@ export default function AnalyticsDashboard() {
           <MetricCard
             label="Uptime"
             value={formatUptime(data.system.uptime)}
-            icon="⏱️"
+            icon={Clock3}
             trend="Stable"
             positive
           />
           <MetricCard
             label="Response Time"
             value={`${data.system.response_time}`}
-            icon="📊"
+            icon={ChartNoAxesColumnIncreasing}
             trend="-5ms"
             positive
             suffix="ms"
@@ -201,7 +227,7 @@ export default function AnalyticsDashboard() {
           <MetricCard
             label="Error Rate"
             value={`${(data.system.error_rate * 100).toFixed(2)}`}
-            icon="⚠️"
+            icon={TriangleAlert}
             trend="-0.01%"
             positive
             suffix="%"
@@ -212,27 +238,27 @@ export default function AnalyticsDashboard() {
       {/* Agent Metrics */}
       <div>
         <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <span className="text-warning">🤖</span> Agent Metrics
+          <Bot className="h-5 w-5 text-warning" /> Agent Metrics
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <MetricCard
             label="Total Tasks"
             value={data.agents.total_tasks}
-            icon="📋"
+            icon={ClipboardList}
             trend="+15%"
             positive
           />
           <MetricCard
             label="Completed"
             value={data.agents.completed_tasks}
-            icon="✨"
+            icon={CircleCheckBig}
             trend="+18%"
             positive
           />
           <MetricCard
             label="Avg Duration"
             value={formatDuration(data.agents.average_duration)}
-            icon="⏱️"
+            icon={Clock3}
             trend="-10%"
             positive
           />
@@ -246,7 +272,7 @@ export default function AnalyticsDashboard() {
           <MetricCard
             label="Communications"
             value={data.agents.communication_count}
-            icon="💬"
+            icon={MessageSquare}
             trend="+25%"
             positive
           />
@@ -256,7 +282,7 @@ export default function AnalyticsDashboard() {
       {/* Trends Chart */}
       <div>
         <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <span className="text-primary">📈</span> Activity Trends
+          <ChartNoAxesCombined className="h-5 w-5 text-primary" /> Activity Trends
         </h2>
         <div className="card p-6">
           <div className="space-y-4">
@@ -323,9 +349,7 @@ export default function AnalyticsDashboard() {
           }}
           className="btn btn-secondary"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
+          <Download className="h-4 w-4" />
           Export Report
         </button>
       </div>
@@ -336,19 +360,21 @@ export default function AnalyticsDashboard() {
 interface MetricCardProps {
   label: string;
   value: string | number;
-  icon: string;
+  icon: LucideIcon;
   trend: string;
   positive: boolean;
   suffix?: string;
 }
 
 function MetricCard({ label, value, icon, trend, positive, suffix = '' }: MetricCardProps) {
+  const Icon = icon;
+  const TrendIcon = positive ? TrendingUp : TrendingDown;
   return (
     <div className="card-sm p-4 hover:border-primary/30 transition-all">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-2xl">{icon}</span>
-        <span className={`text-[10px] ${positive ? 'text-accent' : 'text-error'}`}>
-          {positive ? '↑' : '↓'} {trend}
+        <Icon className="h-5 w-5 text-zinc-400" />
+        <span className={`flex items-center gap-1 text-[10px] ${positive ? 'text-accent' : 'text-error'}`}>
+          <TrendIcon className="h-3 w-3" /> {trend}
         </span>
       </div>
       <div className="text-2xl font-bold text-white mb-1">

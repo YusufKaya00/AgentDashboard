@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { FilePenLine, Lightbulb, TriangleAlert, X, Zap } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { Agent, AIControlPlaneOverview, AIModel } from '@/types';
 
@@ -292,13 +293,13 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
               <p className="text-[10px] text-muted font-mono mt-0.5 break-all">ID: {agent.id} · Type: {agent.config?.type || 'Standard Agent'}</p>
             </div>
             
-            <button 
-              onClick={onClose} 
-              className="p-2 rounded-lg border border-white/10 text-muted hover:text-white hover:bg-white/5 transition-all"
+            <button
+              onClick={onClose}
+              className="icon-button"
+              title="Close"
+              aria-label="Close"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="h-4 w-4" />
             </button>
           </div>
 
@@ -310,7 +311,7 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
             </div>
           ) : error ? (
             <div className="glass-card border-error/20 p-6 text-center">
-              <span className="text-xl">⚠️</span>
+              <TriangleAlert className="mx-auto h-5 w-5 text-error" />
               <p className="text-sm text-white font-bold mt-2">Error Loading Agent Config</p>
               <p className="text-xs text-muted mt-1">{error}</p>
               <button onClick={loadData} className="btn btn-primary btn-sm mt-4">Retry</button>
@@ -435,7 +436,10 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
 
                 <div className="glass-card rounded-xl border border-white/10 overflow-hidden p-0 bg-zinc-950">
                   <div className="flex items-center justify-between px-4 py-2 bg-zinc-900/50 border-b border-white/5 text-[9.5px] font-mono text-zinc-500">
-                    <div>✏️ Markdown Prompt Editor</div>
+                    <div className="flex items-center gap-1.5">
+                      <FilePenLine className="h-3.5 w-3.5" />
+                      Markdown Prompt Editor
+                    </div>
                     <div>{prompt.split('\n').length} lines · {prompt.length} chars</div>
                   </div>
                   
@@ -579,7 +583,8 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
               <div className="glass-card border-primary/20 bg-primary/5">
                 <div className="mb-4">
                   <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-                    <span>⚡ Create & Equip New Skill</span>
+                    <Zap className="h-4 w-4 text-primary" />
+                    <span>Create & Equip New Skill</span>
                   </h3>
                   <p className="text-[9px] text-muted font-medium uppercase tracking-widest mt-0.5">Register a new tool and link it directly</p>
                 </div>
@@ -679,7 +684,10 @@ export default function AgentDetailPanel({ agent, onClose, onRefresh }: AgentDet
 
         {/* Footer */}
         <div className="border-t border-white/5 pt-4 mt-8 flex items-center justify-between text-[10px] text-zinc-500">
-          <div>💡 Press Escape to dismiss details drawer</div>
+          <div className="flex items-center gap-1.5">
+            <Lightbulb className="h-3.5 w-3.5" />
+            Press Escape to dismiss details drawer
+          </div>
           <button onClick={onClose} className="hover:text-white uppercase tracking-wider font-bold">Dismiss</button>
         </div>
       </div>

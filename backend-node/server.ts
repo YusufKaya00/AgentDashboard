@@ -19,6 +19,21 @@ import {
   type SkillSource,
 } from './lib/aiControlPlane.js';
 import { buildAgentExecutionPlan } from './lib/agentExecution.js';
+import {
+  assignRuntimeSkill,
+  createRuntimeAgent,
+  createRuntimeSkill,
+  deleteRuntimeAgent,
+  deleteRuntimeSkill,
+  getAllRuntimeOverviews,
+  getRuntimeOverview,
+  parseRuntimeId,
+  updateRuntimeAgent,
+  updateRuntimeSkill,
+  type RuntimeAgentInput,
+  type RuntimeControlPlaneOptions,
+  type RuntimeSkillInput,
+} from './lib/runtimeControlPlane.js';
 
 import 'dotenv/config';
 
@@ -26,12 +41,46 @@ import 'dotenv/config';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const configuredDashboardOrigins = new Set(
+  (process.env.DASHBOARD_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+);
+const isAllowedDashboardOrigin = (origin: string | undefined) => {
+  if (!origin) return true;
+  if (configuredDashboardOrigins.has(origin)) return true;
+  try {
+    const parsed = new URL(origin);
+    return (
+      (parsed.protocol === 'http:' || parsed.protocol === 'https:')
+      && (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1')
+    );
+  } catch {
+    return false;
+  }
+};
+
 const app = express();
 const server = createServer(app);
-const wss = new WebSocketServer({ server, path: '/ws' });
-const PORT = process.env.PORT || 8000;
+const wss = new WebSocketServer({
+  server,
+  path: '/ws',
+  verifyClient: ({ origin }: { origin?: string }) => isAllowedDashboardOrigin(origin),
+});
+const configuredPort = process.env.PORT === undefined ? 8000 : Number(process.env.PORT);
+if (!Number.isInteger(configuredPort) || configuredPort < 0 || configuredPort > 65535) {
+  throw new Error(`Invalid PORT value: ${process.env.PORT}`);
+}
+const PORT = configuredPort;
+const HOST = process.env.HOST || '127.0.0.1';
 
-app.use(cors());
+app.use(cors({
+  origin(origin, callback) {
+    if (isAllowedDashboardOrigin(origin)) callback(null, true);
+    else callback(new Error(`Origin is not allowed: ${origin}`));
+  },
+}));
 app.use(express.json());
 
 const execAsync = promisify(exec);
@@ -46,32 +95,35 @@ const HOME_DIR = resolveConfiguredPath(process.env.DASHBOARD_HOME_DIR, os.homedi
 const ROOT_DIR = resolveConfiguredPath(process.env.WORKSPACE_DIR, path.resolve(__dirname, '..'));
 const ANTIGRAVITY_HOME = resolveConfiguredPath(process.env.ANTIGRAVITY_HOME, path.join(HOME_DIR, '.gemini', 'antigravity'));
 const CODEX_HOME = resolveConfiguredPath(process.env.CODEX_HOME, path.join(HOME_DIR, '.codex'));
-const CLAUDE_HOME = resolveConfiguredPath(process.env.CLAUDE_HOME, path.join(HOME_DIR, '.claude'));
+const CLAUDE_HOME = resolveConfiguredPath(
+  process.env.CLAUDE_CONFIG_DIR || process.env.CLAUDE_HOME,
+  path.join(HOME_DIR, '.claude')
+);
+const GEMINI_HOME = resolveConfiguredPath(process.env.GEMINI_HOME, path.dirname(ANTIGRAVITY_HOME));
 const LOCAL_CLAUDE_DIR = resolveConfiguredPath(process.env.DASHBOARD_CLAUDE_DIR, path.join(ROOT_DIR, '.claude'));
 const CLAUDE_DIR = ANTIGRAVITY_HOME;
 const SUBAGENTS_METADATA_FILE = path.join(CLAUDE_DIR, 'subagents.json');
+const LEGACY_BOOTSTRAP_ENABLED = process.env.ENABLE_LEGACY_BOOTSTRAP === 'true';
 
-const localClaudeDir = LOCAL_CLAUDE_DIR;
-// Ensure global directory structure exists
-fs.ensureDirSync(CLAUDE_DIR);
-fs.ensureDirSync(path.join(CLAUDE_DIR, 'agents'));
-fs.ensureDirSync(path.join(CLAUDE_DIR, 'data'));
+if (LEGACY_BOOTSTRAP_ENABLED) {
+  fs.ensureDirSync(CLAUDE_DIR);
+  fs.ensureDirSync(path.join(CLAUDE_DIR, 'agents'));
+  fs.ensureDirSync(path.join(CLAUDE_DIR, 'data'));
 
-// Migrate from local .claude if global files do not exist
-const filesToMigrate = [
-  'agents.json',
-  'models.json',
-  'hooks.json',
-  'skills.json',
-  'tasks.json',
-  'data/activities.json',
-  'data/skill_assignments.json'
-];
+  const filesToMigrate = [
+    'agents.json',
+    'models.json',
+    'hooks.json',
+    'skills.json',
+    'tasks.json',
+    'data/activities.json',
+    'data/skill_assignments.json'
+  ];
 
-for (const file of filesToMigrate) {
-  const src = path.join(localClaudeDir, file);
-  const dest = path.join(CLAUDE_DIR, file);
-  if (fs.existsSync(src) && !fs.existsSync(dest)) {
+  for (const file of filesToMigrate) {
+    const src = path.join(LOCAL_CLAUDE_DIR, file);
+    const dest = path.join(CLAUDE_DIR, file);
+    if (!fs.existsSync(src) || fs.existsSync(dest)) continue;
     try {
       fs.copySync(src, dest);
       console.log(`[Migration] Copying ${file} to global .gemini/antigravity`);
@@ -79,24 +131,23 @@ for (const file of filesToMigrate) {
       console.error(`[Migration] Failed to copy ${file}:`, err);
     }
   }
-}
 
-// Copy prompt markdown files
-const srcAgents = path.join(localClaudeDir, 'agents');
-const destAgents = path.join(CLAUDE_DIR, 'agents');
-if (fs.existsSync(srcAgents)) {
-  try {
-    const files = fs.readdirSync(srcAgents);
-    for (const file of files) {
-      const srcFile = path.join(srcAgents, file);
-      const destFile = path.join(destAgents, file);
-      if (!fs.existsSync(destFile)) {
-        fs.copySync(srcFile, destFile);
-        console.log(`[Migration] Copying agent config ${file} to global .gemini/antigravity`);
+  const srcAgents = path.join(LOCAL_CLAUDE_DIR, 'agents');
+  const destAgents = path.join(CLAUDE_DIR, 'agents');
+  if (fs.existsSync(srcAgents)) {
+    try {
+      const files = fs.readdirSync(srcAgents);
+      for (const file of files) {
+        const srcFile = path.join(srcAgents, file);
+        const destFile = path.join(destAgents, file);
+        if (!fs.existsSync(destFile)) {
+          fs.copySync(srcFile, destFile);
+          console.log(`[Migration] Copying agent config ${file} to global .gemini/antigravity`);
+        }
       }
+    } catch (err) {
+      console.error(`[Migration] Failed to copy agent config files:`, err);
     }
-  } catch (err) {
-    console.error(`[Migration] Failed to copy agent config files:`, err);
   }
 }
 
@@ -109,6 +160,17 @@ const ACTIVITIES_FILE = path.join(DATA_DIR, 'activities.json');
 const SKILL_ASSIGNMENTS_FILE = path.join(DATA_DIR, 'skill_assignments.json');
 const HOOK_HISTORY_FILE = path.join(DATA_DIR, 'hook_history.json');
 const CHAT_LOGS_FILE = path.join(DATA_DIR, 'chat_logs.json');
+
+const RUNTIME_CONTROL_OPTIONS: RuntimeControlPlaneOptions = {
+  homeDir: HOME_DIR,
+  workspaceDir: ROOT_DIR,
+  codexHome: CODEX_HOME,
+  claudeHome: CLAUDE_HOME,
+  geminiHome: GEMINI_HOME,
+  ...(process.env.CODEX_SQLITE_HOME
+    ? { codexSqliteHome: resolveConfiguredPath(process.env.CODEX_SQLITE_HOME, CODEX_HOME) }
+    : {}),
+};
 
 // ============ MULTI-RUNTIME AGENTS HELPERS ============
 const getAgentPaths = (runtime: string, id: string) => {
@@ -554,14 +616,16 @@ app.post('/api/hooks/trigger', async (req, res) => {
 });
 
 // ============ FILE WATCHER ============
-const watcher = chokidar.watch(ROOT_DIR, {
-  ignored: [/(^|[\/\\])\../, '**/node_modules/**', '**/backend-node/**', '**/backend/**', '**/.next/**'],
-  persistent: true,
-  ignoreInitial: true
-});
+const watcher = process.env.ENABLE_FILE_WATCHER === 'true'
+  ? chokidar.watch(ROOT_DIR, {
+      ignored: [/(^|[\/\\])\../, '**/node_modules/**', '**/backend-node/**', '**/backend/**', '**/.next/**'],
+      persistent: true,
+      ignoreInitial: true
+    })
+  : null;
 
 let fileChangeTimeout: NodeJS.Timeout | null = null;
-watcher.on('change', (filePath) => {
+watcher?.on('change', (filePath) => {
   const rel = path.relative(ROOT_DIR, filePath);
   logActivity('workspace', `File modified: ${rel}`, 'system');
   
@@ -775,7 +839,7 @@ const initAgents = async () => {
   }
   if (changed) await writeJson(AGENTS_METADATA_FILE, agents);
 };
-const startupPromise = initAgents();
+const startupPromise = LEGACY_BOOTSTRAP_ENABLED ? initAgents() : Promise.resolve();
 
 app.use(async (_req, _res, next) => {
   try {
@@ -819,12 +883,14 @@ curl -s -X POST http://127.0.0.1:8000/api/hooks/trigger \\
 
     await fs.writeFile(preCommitPath, preCommitHook, { mode: 0o755 });
     await fs.writeFile(prePushPath, prePushHook, { mode: 0o755 });
-    console.log('✅ Tnega Git Hooks installed successfully at .git/hooks/ (pre-commit, pre-push)');
+    console.log('Tnega Git Hooks installed successfully at .git/hooks/ (pre-commit, pre-push)');
   } catch (error) {
-    console.error('❌ Failed to install git hooks:', error);
+    console.error('Failed to install git hooks:', error);
   }
 };
-installGitHooks();
+if (process.env.INSTALL_GIT_HOOKS === 'true') {
+  void installGitHooks();
+}
 
 app.get('/api/agents/summary', async (_req, res) => {
   const [claudeAndAgAgents, subagents] = await Promise.all([
@@ -2051,6 +2117,140 @@ app.put('/api/ai/skills/:skillKey/assignments', async (req, res) => {
   }
 });
 
+// ============ NATIVE RUNTIME CONTROL PLANE ============
+const sendRuntimeApiError = (res: express.Response, error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  const status = normalized.includes('not found')
+    ? 404
+    : normalized.includes('already exists') || normalized.includes('assigned to agents')
+      ? 409
+      : normalized.includes('unsupported runtime')
+        || normalized.includes('scope must')
+        || normalized.includes('must be')
+        || normalized.includes('too long')
+        || normalized.includes('too many')
+        || normalized.includes('unsafe')
+        || normalized.includes('read-only')
+        || normalized.includes('required')
+        ? 400
+        : 500;
+  res.status(status).json({ error: message });
+};
+
+app.get('/api/runtimes', async (_req, res) => {
+  try {
+    res.json(await getAllRuntimeOverviews(RUNTIME_CONTROL_OPTIONS));
+  } catch (error: unknown) {
+    sendRuntimeApiError(res, error);
+  }
+});
+
+app.get('/api/runtimes/:runtime/overview', async (req, res) => {
+  try {
+    const runtime = parseRuntimeId(req.params.runtime);
+    res.json(await getRuntimeOverview(RUNTIME_CONTROL_OPTIONS, runtime));
+  } catch (error: unknown) {
+    sendRuntimeApiError(res, error);
+  }
+});
+
+app.post('/api/runtimes/:runtime/agents', async (req, res) => {
+  try {
+    const runtime = parseRuntimeId(req.params.runtime);
+    const agent = await createRuntimeAgent(
+      RUNTIME_CONTROL_OPTIONS,
+      runtime,
+      req.body as RuntimeAgentInput
+    );
+    res.status(201).json(agent);
+  } catch (error: unknown) {
+    sendRuntimeApiError(res, error);
+  }
+});
+
+app.put('/api/runtimes/:runtime/agents/:scope/:id', async (req, res) => {
+  try {
+    const runtime = parseRuntimeId(req.params.runtime);
+    const agent = await updateRuntimeAgent(
+      RUNTIME_CONTROL_OPTIONS,
+      runtime,
+      req.params.scope,
+      req.params.id,
+      req.body as RuntimeAgentInput
+    );
+    res.json(agent);
+  } catch (error: unknown) {
+    sendRuntimeApiError(res, error);
+  }
+});
+
+app.delete('/api/runtimes/:runtime/agents/:scope/:id', async (req, res) => {
+  try {
+    const runtime = parseRuntimeId(req.params.runtime);
+    res.json(await deleteRuntimeAgent(
+      RUNTIME_CONTROL_OPTIONS,
+      runtime,
+      req.params.scope,
+      req.params.id
+    ));
+  } catch (error: unknown) {
+    sendRuntimeApiError(res, error);
+  }
+});
+
+app.post('/api/runtimes/:runtime/skills', async (req, res) => {
+  try {
+    const runtime = parseRuntimeId(req.params.runtime);
+    const skill = await createRuntimeSkill(
+      RUNTIME_CONTROL_OPTIONS,
+      runtime,
+      req.body as RuntimeSkillInput
+    );
+    res.status(201).json(skill);
+  } catch (error: unknown) {
+    sendRuntimeApiError(res, error);
+  }
+});
+
+app.put('/api/runtimes/:runtime/skills/:scope/:id', async (req, res) => {
+  try {
+    const runtime = parseRuntimeId(req.params.runtime);
+    const skill = await updateRuntimeSkill(
+      RUNTIME_CONTROL_OPTIONS,
+      runtime,
+      req.params.scope,
+      req.params.id,
+      req.body as RuntimeSkillInput
+    );
+    res.json(skill);
+  } catch (error: unknown) {
+    sendRuntimeApiError(res, error);
+  }
+});
+
+app.delete('/api/runtimes/:runtime/skills/:scope/:id', async (req, res) => {
+  try {
+    const runtime = parseRuntimeId(req.params.runtime);
+    res.json(await deleteRuntimeSkill(
+      RUNTIME_CONTROL_OPTIONS,
+      runtime,
+      req.params.scope,
+      req.params.id
+    ));
+  } catch (error: unknown) {
+    sendRuntimeApiError(res, error);
+  }
+});
+
+app.post('/api/runtime-skill-assignments', async (req, res) => {
+  try {
+    res.status(201).json(await assignRuntimeSkill(RUNTIME_CONTROL_OPTIONS, req.body));
+  } catch (error: unknown) {
+    sendRuntimeApiError(res, error);
+  }
+});
+
 // ============ CODEX OBSERVABILITY ============
 app.get('/api/codex/overview', async (_req, res) => {
   try {
@@ -2297,68 +2497,14 @@ const getAntigravitySessions = () => {
 };
 
 const getAntigravitySubagents = async () => {
-  const defaultSubagents = [
-    {
-      id: 'research',
-      name: 'research',
-      role: 'Codebase Researcher',
-      description: 'Research subagent with read-only tools for exploring the codebase and searching the web.',
-      status: 'idle',
-      type: 'static',
-      rules: 'Only use read-only tools. Search the web for official documentation. Never write or modify source code files.'
-    },
-    {
-      id: 'self',
-      name: 'self',
-      role: 'Autonomous Clone',
-      description: 'Autonomous clone inheriting the parent agent\'s configuration and tools.',
-      status: 'idle',
-      type: 'static',
-      rules: 'Inherit and run all operations in parallel. Ensure absolute code correctness. Double-check all plan checkpoints.'
-    },
-    {
-      id: 'frontend',
-      name: 'frontend',
-      role: 'Frontend Developer',
-      description: 'Specialized in UI component creation, layout polishing, styling, and Next.js frontend architectures.',
-      status: 'idle',
-      type: 'static',
-      rules: 'Prioritize premium UI aesthetics, custom CSS animations, proper responsive structures, SEO tags, and precise HTML hierarchy.'
-    },
-    {
-      id: 'backend',
-      name: 'backend',
-      role: 'Backend Developer',
-      description: 'Specialized in API endpoint development, database integrations, routers, and server orchestration.',
-      status: 'idle',
-      type: 'static',
-      rules: 'Prioritize clean modular endpoint architectures, strict error handling, inputs validation, security, and logging.'
-    },
-    {
-      id: 'tester',
-      name: 'tester',
-      role: 'QA & Test Engineer',
-      description: 'Specialized in automated test writing, code verification, unit testing, and functionality debugging.',
-      status: 'idle',
-      type: 'static',
-      rules: 'Focus on edge cases coverage, automated unit and integration tests, reporting clean assertions, and verifying builds.'
-    }
-  ];
-
-  let subagents = defaultSubagents;
+  let subagents: any[] = [];
 
   if (fs.existsSync(SUBAGENTS_METADATA_FILE)) {
     try {
       const data = fs.readFileSync(SUBAGENTS_METADATA_FILE, 'utf-8');
       subagents = JSON.parse(data);
     } catch (e) {
-      console.error('Error reading subagents.json, falling back to defaults:', e);
-    }
-  } else {
-    try {
-      fs.writeFileSync(SUBAGENTS_METADATA_FILE, JSON.stringify(defaultSubagents, null, 2), 'utf-8');
-    } catch (e) {
-      console.error('Error writing default subagents.json:', e);
+      console.error('Error reading legacy subagents.json:', e);
     }
   }
 
@@ -2827,8 +2973,10 @@ app.get('/api/hooks/history', async (_req, res) => {
 });
 
 // ============ START ============
-server.listen(PORT, () => {
-  console.log(`🚀 Node.js Backend running on http://localhost:${PORT}`);
-  console.log(`📁 Workspace: ${ROOT_DIR}`);
-  console.log(`🌐 Providers: ${PROVIDERS_FILE}`);
+server.listen(PORT, HOST, () => {
+  const address = server.address();
+  const boundPort = typeof address === 'object' && address ? address.port : PORT;
+  console.log(`Node.js backend running on http://${HOST}:${boundPort}`);
+  console.log(`Workspace: ${ROOT_DIR}`);
+  console.log(`Providers: ${PROVIDERS_FILE}`);
 });

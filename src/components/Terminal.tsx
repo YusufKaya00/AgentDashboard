@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { Plus, Trash2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface TerminalMessage {
@@ -77,7 +78,7 @@ export default function Terminal() {
       } else {
         addMessage('output', 'Command executed successfully with no output.');
       }
-    } catch (error: any) {
+    } catch {
       // Fallback to local simulation
       const output = simulateCommand(command);
       addMessage(output.type, output.content);
@@ -336,15 +337,11 @@ System Metrics:
         </div>
         <div className="flex gap-2">
           <button onClick={createTab} className="btn btn-secondary btn-sm">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+            <Plus className="h-4 w-4" />
             New Tab
           </button>
           <button onClick={clearTerminal} className="btn btn-secondary btn-sm">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
+            <Trash2 className="h-4 w-4" />
             Clear
           </button>
         </div>
@@ -355,29 +352,32 @@ System Metrics:
         {/* Tabs */}
         <div className="flex items-center gap-1 p-2 border-b border-border" style={{ backgroundColor: 'var(--background-alt)' }}>
           {tabs.map((tab) => (
-            <button
+            <div
               key={tab.id}
-              onClick={() => switchTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-medium transition-all ${
                 tab.active
                   ? 'bg-primary/10 text-primary border border-primary/30'
                   : 'text-foreground-muted hover:text-white hover:bg-surface'
               }`}
             >
-              <span className="w-2 h-2 rounded-full bg-accent status-online" />
-              {tab.name}
+              <button
+                onClick={() => switchTab(tab.id)}
+                className="flex min-w-0 items-center gap-2"
+              >
+                <span className="w-2 h-2 shrink-0 rounded-full bg-accent status-online" />
+                <span className="truncate">{tab.name}</span>
+              </button>
               {tabs.length > 1 && (
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    closeTab(tab.id);
-                  }}
+                  onClick={() => closeTab(tab.id)}
                   className="ml-2 hover:text-error transition-colors"
+                  title={`Close ${tab.name}`}
+                  aria-label={`Close ${tab.name}`}
                 >
-                  ×
+                  <X className="h-3.5 w-3.5" />
                 </button>
               )}
-            </button>
+            </div>
           ))}
         </div>
 
@@ -386,7 +386,7 @@ System Metrics:
           {activeTab.messages.length === 0 && (
             <div className="text-foreground-muted">
               <p className="mb-2">Claude Dashboard Terminal v5.0</p>
-              <p className="mb-4">Type 'help' for available commands.</p>
+              <p className="mb-4">Type &apos;help&apos; for available commands.</p>
             </div>
           )}
 

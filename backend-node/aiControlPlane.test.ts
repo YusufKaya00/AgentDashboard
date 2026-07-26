@@ -25,7 +25,7 @@ describe('ai control plane', () => {
           name: 'systematic-debugging',
           description: 'Debug before fixing',
           source: 'plugin',
-          file_path: 'C:/Users/skyks/.codex/plugins/debugging/SKILL.md',
+          file_path: 'C:/Users/tester/.codex/plugins/debugging/SKILL.md',
           updated_at: '2026-05-18T08:00:00.000Z',
         },
       ],
