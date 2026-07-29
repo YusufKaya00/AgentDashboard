@@ -2,6 +2,20 @@
 
 import RuntimeControlPanel from './RuntimeControlPanel';
 
-export default function AntigravityControlPanel() {
-  return <RuntimeControlPanel runtime="antigravity" />;
+interface AntigravityControlPanelProps {
+  liveConnected?: boolean;
+  liveRevision?: number;
+}
+
+export default function AntigravityControlPanel({
+  liveConnected,
+  liveRevision,
+}: AntigravityControlPanelProps) {
+  return (
+    <RuntimeControlPanel
+      runtime="antigravity"
+      liveConnected={liveConnected}
+      liveRevision={liveRevision}
+    />
+  );
 }

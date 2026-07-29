@@ -7,7 +7,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import os from 'os';
 import { fileURLToPath } from 'url';
-import { exec } from 'child_process';
+import { exec, execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import { getCodexInventory } from './lib/codexInventory.js';
 import {
@@ -20,20 +20,35 @@ import {
 } from './lib/aiControlPlane.js';
 import { buildAgentExecutionPlan } from './lib/agentExecution.js';
 import {
+  buildRuntimeHookExecutionPlan,
+  runtimeCommandCandidates,
+  type RuntimeHookExecutionPlan,
+} from './lib/hookExecution.js';
+import {
   assignRuntimeSkill,
   createRuntimeAgent,
   createRuntimeSkill,
   deleteRuntimeAgent,
   deleteRuntimeSkill,
   getAllRuntimeOverviews,
+  getRuntimeAgentDefinition,
   getRuntimeOverview,
+  getRuntimeSessionMessages,
+  getRuntimeSessions,
+  getRuntimeTransmissions,
   parseRuntimeId,
   updateRuntimeAgent,
   updateRuntimeSkill,
   type RuntimeAgentInput,
   type RuntimeControlPlaneOptions,
+  type RuntimeId,
+  type RuntimeScope,
   type RuntimeSkillInput,
 } from './lib/runtimeControlPlane.js';
+import {
+  startRuntimeLiveUpdates,
+  type RuntimeChangeCategory,
+} from './lib/runtimeLiveUpdates.js';
 
 import 'dotenv/config';
 
@@ -84,6 +99,7 @@ app.use(cors({
 app.use(express.json());
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 // ============ PATHS ============
 const resolveConfiguredPath = (value: string | undefined, fallback: string) => {
@@ -167,6 +183,7 @@ const RUNTIME_CONTROL_OPTIONS: RuntimeControlPlaneOptions = {
   codexHome: CODEX_HOME,
   claudeHome: CLAUDE_HOME,
   geminiHome: GEMINI_HOME,
+  sessionScope: process.env.RUNTIME_SESSION_SCOPE === 'workspace' ? 'workspace' : 'all',
   ...(process.env.CODEX_SQLITE_HOME
     ? { codexSqliteHome: resolveConfiguredPath(process.env.CODEX_SQLITE_HOME, CODEX_HOME) }
     : {}),
@@ -341,6 +358,22 @@ const broadcast = (data: any) => {
   wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) client.send(msg);
   });
+};
+
+const runtimeLiveUpdates = process.env.ENABLE_RUNTIME_LIVE_UPDATES === 'false'
+  ? null
+  : await startRuntimeLiveUpdates(
+      RUNTIME_CONTROL_OPTIONS,
+      (update) => broadcast(update)
+    );
+
+const publishRuntimeChange = async (
+  runtime: ReturnType<typeof parseRuntimeId>,
+  category: RuntimeChangeCategory
+) => {
+  if (!runtimeLiveUpdates) return;
+  await runtimeLiveUpdates.refresh(runtime);
+  runtimeLiveUpdates.notify(runtime, category);
 };
 
 const readJson = async (filePath: string, fallback: any = []) => {
@@ -518,9 +551,94 @@ const getAIControlPlaneOverview = async () => {
 };
 
 // ============ HOOK EXECUTION ENGINE & RUNNER ============
+const resolveRuntimeExecutable = async (runtime: RuntimeId): Promise<string> => {
+  const configured = process.env[`DASHBOARD_${runtime.toUpperCase()}_COMMAND`]?.trim();
+  if (configured) return configured;
+
+  for (const candidate of runtimeCommandCandidates(runtime)) {
+    try {
+      if (process.platform === 'win32') {
+        await execFileAsync('where.exe', [candidate], { timeout: 5000, windowsHide: true });
+      } else {
+        await execFileAsync('sh', ['-lc', `command -v ${candidate}`], { timeout: 5000 });
+      }
+      return candidate;
+    } catch {}
+  }
+
+  throw new Error(
+    `${runtime} CLI was not found. Install it or set DASHBOARD_${runtime.toUpperCase()}_COMMAND.`
+  );
+};
+
+const runRuntimeHookProcess = (
+  plan: RuntimeHookExecutionPlan,
+  hook: any,
+  triggerType: string
+): Promise<{ stdout: string; stderr: string }> => {
+  return new Promise((resolve, reject) => {
+    const child = spawn(plan.shell_command, {
+      cwd: ROOT_DIR,
+      env: {
+        ...process.env,
+        HOOK_NAME: String(hook.name || ''),
+        HOOK_TRIGGER: triggerType,
+        DASHBOARD_HOOK_RUNTIME: plan.runtime,
+        DASHBOARD_HOOK_MODEL: plan.model || '',
+        DASHBOARD_HOOK_AGENT_ID: plan.agent_id || '',
+      },
+      shell: true,
+      windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const maxOutput = 2 * 1024 * 1024;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      child.kill();
+      reject(new Error(`${plan.runtime} hook execution timed out after 120 seconds`));
+    }, 120_000);
+
+    child.stdout?.on('data', (chunk) => {
+      if (stdout.length < maxOutput) stdout += String(chunk).slice(0, maxOutput - stdout.length);
+    });
+    child.stderr?.on('data', (chunk) => {
+      if (stderr.length < maxOutput) stderr += String(chunk).slice(0, maxOutput - stderr.length);
+    });
+    child.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(new Error(
+        `${plan.runtime} CLI exited with code ${code}: ${(stderr || stdout || 'No output').slice(0, 1000)}`
+      ));
+    });
+    child.stdin?.end(plan.stdin);
+  });
+};
+
+const resolveHookAgent = async (hook: any, runtime: RuntimeId) => {
+  if (hook.execution_mode !== 'agent') return null;
+  const agentId = String(hook.agent_id || '').trim();
+  const agentScope = String(hook.agent_scope || '').trim() as RuntimeScope;
+  if (!agentId || !['builtin', 'system', 'plugin', 'global', 'project', 'legacy'].includes(agentScope)) {
+    throw new Error('A valid native agent target is required for agent hook execution');
+  }
+  return getRuntimeAgentDefinition(RUNTIME_CONTROL_OPTIONS, runtime, agentScope, agentId);
+};
+
 const runHookAsync = async (hook: any, triggerType: string) => {
   const isEnabled = hook.active ?? hook.enabled ?? true;
-  if (!isEnabled) return;
+  if (!isEnabled && triggerType !== 'manual') return null;
 
   const historyEntry: any = {
     id: genId(),
@@ -538,10 +656,22 @@ const runHookAsync = async (hook: any, triggerType: string) => {
   broadcast({ type: 'hook-history-update', hook_id: hook.id });
 
   try {
-    let finalCommand = hook.action;
-    
-    // If agent is selected, build an agent command that evaluates git diff
-    if (hook.agent && hook.agent !== 'none') {
+    const executionMode = hook.execution_mode
+      || (hook.agent === 'none' ? 'shell' : 'runtime');
+    let stdout = '';
+    let stderr = '';
+
+    if (executionMode === 'shell') {
+      const result = await execAsync(String(hook.action || ''), {
+        cwd: ROOT_DIR,
+        timeout: 60_000,
+        env: { ...process.env, HOOK_NAME: hook.name, HOOK_TRIGGER: triggerType },
+      });
+      stdout = result.stdout;
+      stderr = result.stderr;
+      historyEntry.target = { execution_mode: 'shell' };
+    } else {
+      const runtime = parseRuntimeId(hook.runtime || hook.agent);
       let diff = '';
       try {
         const { stdout } = await execAsync('git diff HEAD', { cwd: ROOT_DIR, timeout: 15000 });
@@ -550,26 +680,29 @@ const runHookAsync = async (hook: any, triggerType: string) => {
         diff = `Failed to retrieve git diff: ${gitErr.message}`;
       }
 
-      const prompt = `Task: ${hook.action}\nCode Changes to review:\n${diff}`;
-      // Wrap prompt in quotes and escape
-      const escapedPrompt = prompt.replace(/"/g, '\\"').replace(/\n/g, ' ');
-
-      if (hook.agent === 'antigravity') {
-        finalCommand = `antigravity "${escapedPrompt.substring(0, 2000)}"`;
-      } else if (hook.agent === 'claude') {
-        finalCommand = `claude -p "${escapedPrompt.substring(0, 2000)}"`;
-      } else if (hook.agent === 'codex') {
-        finalCommand = `codex run "${escapedPrompt.substring(0, 2000)}"`;
-      }
+      const nativeAgent = await resolveHookAgent(hook, runtime);
+      const executable = await resolveRuntimeExecutable(runtime);
+      const plan = buildRuntimeHookExecutionPlan({
+        runtime,
+        executable,
+        action: String(hook.action || ''),
+        diff,
+        model: typeof hook.model === 'string' ? hook.model : null,
+        agent: nativeAgent,
+      });
+      const result = await runRuntimeHookProcess(plan, hook, triggerType);
+      stdout = result.stdout;
+      stderr = result.stderr;
+      historyEntry.target = {
+        execution_mode: executionMode,
+        runtime,
+        model: plan.model,
+        agent_id: plan.agent_id,
+        command_preview: plan.command_preview,
+      };
     }
 
     logActivity('hook-exec', `Hook "${hook.name}" execution started via ${triggerType}`, 'system');
-
-    const { stdout, stderr } = await execAsync(finalCommand, { 
-      cwd: ROOT_DIR, 
-      timeout: 60000,
-      env: { ...process.env, HOOK_NAME: hook.name, HOOK_TRIGGER: triggerType }
-    });
 
     history = await readJson(HOOK_HISTORY_FILE, []);
     const idx = history.findIndex((h: any) => h.id === historyEntry.id);
@@ -583,6 +716,7 @@ const runHookAsync = async (hook: any, triggerType: string) => {
     
     logActivity('hook-exec', `Hook "${hook.name}" executed successfully`, 'system', { output: stdout.substring(0, 200) });
     broadcast({ type: 'hook-history-update', hook_id: hook.id });
+    return history[idx] || historyEntry;
   } catch (e: any) {
     history = await readJson(HOOK_HISTORY_FILE, []);
     const idx = history.findIndex((h: any) => h.id === historyEntry.id);
@@ -595,6 +729,7 @@ const runHookAsync = async (hook: any, triggerType: string) => {
     
     logActivity('hook-exec', `Hook "${hook.name}" failed: ${e.message?.substring(0, 150)}`, 'system');
     broadcast({ type: 'hook-history-update', hook_id: hook.id });
+    return history[idx] || historyEntry;
   }
 };
 
@@ -637,7 +772,11 @@ watcher?.on('change', (filePath) => {
 
 // ============ WEBSOCKET ============
 wss.on('connection', (ws) => {
-  ws.send(JSON.stringify({ type: 'connected', message: 'Node.js backend connected' }));
+  ws.send(JSON.stringify({
+    type: 'connected',
+    message: 'Node.js backend connected',
+    runtime_live_updates: Boolean(runtimeLiveUpdates),
+  }));
   
   const heartbeat = setInterval(() => {
     if (ws.readyState === WebSocket.OPEN) {
@@ -2146,6 +2285,42 @@ app.get('/api/runtimes', async (_req, res) => {
   }
 });
 
+app.get('/api/runtimes/activity', async (req, res) => {
+  try {
+    const requestedLimit = Number(req.query.limit ?? 24);
+    const limit = Number.isFinite(requestedLimit) ? requestedLimit : 24;
+    res.json(await getRuntimeTransmissions(RUNTIME_CONTROL_OPTIONS, limit));
+  } catch (error: unknown) {
+    sendRuntimeApiError(res, error);
+  }
+});
+
+app.get('/api/runtimes/sessions', async (req, res) => {
+  try {
+    const requestedLimit = Number(req.query.limit ?? 240);
+    const limit = Number.isFinite(requestedLimit) ? requestedLimit : 240;
+    res.json(await getRuntimeSessions(RUNTIME_CONTROL_OPTIONS, limit));
+  } catch (error: unknown) {
+    sendRuntimeApiError(res, error);
+  }
+});
+
+app.get('/api/runtimes/:runtime/sessions/:threadId/messages', async (req, res) => {
+  try {
+    const runtime = parseRuntimeId(req.params.runtime);
+    const requestedLimit = Number(req.query.limit ?? 500);
+    const limit = Number.isFinite(requestedLimit) ? requestedLimit : 500;
+    res.json(await getRuntimeSessionMessages(
+      RUNTIME_CONTROL_OPTIONS,
+      runtime,
+      req.params.threadId,
+      limit
+    ));
+  } catch (error: unknown) {
+    sendRuntimeApiError(res, error);
+  }
+});
+
 app.get('/api/runtimes/:runtime/overview', async (req, res) => {
   try {
     const runtime = parseRuntimeId(req.params.runtime);
@@ -2163,6 +2338,7 @@ app.post('/api/runtimes/:runtime/agents', async (req, res) => {
       runtime,
       req.body as RuntimeAgentInput
     );
+    await publishRuntimeChange(runtime, 'agents');
     res.status(201).json(agent);
   } catch (error: unknown) {
     sendRuntimeApiError(res, error);
@@ -2179,6 +2355,7 @@ app.put('/api/runtimes/:runtime/agents/:scope/:id', async (req, res) => {
       req.params.id,
       req.body as RuntimeAgentInput
     );
+    await publishRuntimeChange(runtime, 'agents');
     res.json(agent);
   } catch (error: unknown) {
     sendRuntimeApiError(res, error);
@@ -2188,12 +2365,14 @@ app.put('/api/runtimes/:runtime/agents/:scope/:id', async (req, res) => {
 app.delete('/api/runtimes/:runtime/agents/:scope/:id', async (req, res) => {
   try {
     const runtime = parseRuntimeId(req.params.runtime);
-    res.json(await deleteRuntimeAgent(
+    const result = await deleteRuntimeAgent(
       RUNTIME_CONTROL_OPTIONS,
       runtime,
       req.params.scope,
       req.params.id
-    ));
+    );
+    await publishRuntimeChange(runtime, 'agents');
+    res.json(result);
   } catch (error: unknown) {
     sendRuntimeApiError(res, error);
   }
@@ -2207,6 +2386,7 @@ app.post('/api/runtimes/:runtime/skills', async (req, res) => {
       runtime,
       req.body as RuntimeSkillInput
     );
+    await publishRuntimeChange(runtime, 'skills');
     res.status(201).json(skill);
   } catch (error: unknown) {
     sendRuntimeApiError(res, error);
@@ -2223,6 +2403,7 @@ app.put('/api/runtimes/:runtime/skills/:scope/:id', async (req, res) => {
       req.params.id,
       req.body as RuntimeSkillInput
     );
+    await publishRuntimeChange(runtime, 'skills');
     res.json(skill);
   } catch (error: unknown) {
     sendRuntimeApiError(res, error);
@@ -2232,12 +2413,14 @@ app.put('/api/runtimes/:runtime/skills/:scope/:id', async (req, res) => {
 app.delete('/api/runtimes/:runtime/skills/:scope/:id', async (req, res) => {
   try {
     const runtime = parseRuntimeId(req.params.runtime);
-    res.json(await deleteRuntimeSkill(
+    const result = await deleteRuntimeSkill(
       RUNTIME_CONTROL_OPTIONS,
       runtime,
       req.params.scope,
       req.params.id
-    ));
+    );
+    await publishRuntimeChange(runtime, 'skills');
+    res.json(result);
   } catch (error: unknown) {
     sendRuntimeApiError(res, error);
   }
@@ -2245,7 +2428,13 @@ app.delete('/api/runtimes/:runtime/skills/:scope/:id', async (req, res) => {
 
 app.post('/api/runtime-skill-assignments', async (req, res) => {
   try {
-    res.status(201).json(await assignRuntimeSkill(RUNTIME_CONTROL_OPTIONS, req.body));
+    const result = await assignRuntimeSkill(RUNTIME_CONTROL_OPTIONS, req.body);
+    const targetRuntime = parseRuntimeId(req.body.target_runtime);
+    await publishRuntimeChange(targetRuntime, 'skills');
+    if (result.target_agent_imported) {
+      await publishRuntimeChange(targetRuntime, 'agents');
+    }
+    res.status(201).json(result);
   } catch (error: unknown) {
     sendRuntimeApiError(res, error);
   }
@@ -2888,77 +3077,7 @@ app.post('/api/hooks/:id/execute', async (req, res) => {
   const hooks = await readJson(HOOKS_FILE, []);
   const hook = hooks.find((h: any) => h.id === req.params.id);
   if (!hook) return res.status(404).json({ error: 'Hook not found' });
-  
-  const historyEntry: any = {
-    id: genId(),
-    hook_id: hook.id,
-    hook_name: hook.name,
-    triggered_at: new Date().toISOString(),
-    trigger: 'manual',
-    status: 'running'
-  };
-  
-  let history = await readJson(HOOK_HISTORY_FILE, []);
-  history.push(historyEntry);
-  await writeJson(HOOK_HISTORY_FILE, history.slice(-200));
-  broadcast({ type: 'hook-history-update', hook_id: hook.id });
-
-  try {
-    let finalCommand = hook.action;
-    if (hook.agent && hook.agent !== 'none') {
-      let diff = '';
-      try {
-        const { stdout } = await execAsync('git diff HEAD', { cwd: ROOT_DIR, timeout: 15000 });
-        diff = stdout || 'No uncommitted changes detected (clean working tree).';
-      } catch (gitErr: any) {
-        diff = `Failed to retrieve git diff: ${gitErr.message}`;
-      }
-      const prompt = `Task: ${hook.action}\nCode Changes to review:\n${diff}`;
-      const escapedPrompt = prompt.replace(/"/g, '\\"').replace(/\n/g, ' ');
-
-      if (hook.agent === 'antigravity') {
-        finalCommand = `antigravity "${escapedPrompt.substring(0, 2000)}"`;
-      } else if (hook.agent === 'claude') {
-        finalCommand = `claude -p "${escapedPrompt.substring(0, 2000)}"`;
-      } else if (hook.agent === 'codex') {
-        finalCommand = `codex run "${escapedPrompt.substring(0, 2000)}"`;
-      }
-    }
-
-    logActivity('hook-exec', `Hook "${hook.name}" manual run started`, 'system');
-
-    const { stdout, stderr } = await execAsync(finalCommand, { 
-      cwd: ROOT_DIR, 
-      timeout: 60000,
-      env: { ...process.env, HOOK_NAME: hook.name, HOOK_TRIGGER: 'manual' }
-    });
-
-    historyEntry.status = 'success';
-    historyEntry.output = stdout.substring(0, 2000);
-    historyEntry.error = stderr ? stderr.substring(0, 500) : null;
-    historyEntry.completed_at = new Date().toISOString();
-
-    logActivity('hook-exec', `Hook "${hook.name}" executed successfully (manual)`, 'system', { output: stdout.substring(0, 200) });
-  } catch (e: any) {
-    historyEntry.status = 'error';
-    historyEntry.error = e.message?.substring(0, 1000) || 'Unknown error';
-    historyEntry.completed_at = new Date().toISOString();
-
-    logActivity('hook-exec', `Hook "${hook.name}" failed: ${e.message?.substring(0, 100)}`, 'system');
-  }
-
-  // Update history
-  history = await readJson(HOOK_HISTORY_FILE, []);
-  const entryIdx = history.findIndex((h: any) => h.id === historyEntry.id);
-  if (entryIdx !== -1) {
-    history[entryIdx] = historyEntry;
-  } else {
-    history.push(historyEntry);
-  }
-  await writeJson(HOOK_HISTORY_FILE, history.slice(-200));
-  broadcast({ type: 'hook-history-update', hook_id: hook.id });
-  
-  res.json(historyEntry);
+  res.json(await runHookAsync(hook, 'manual'));
 });
 
 app.get('/api/hooks/:id/history', async (req, res) => {
@@ -2978,5 +3097,7 @@ server.listen(PORT, HOST, () => {
   const boundPort = typeof address === 'object' && address ? address.port : PORT;
   console.log(`Node.js backend running on http://${HOST}:${boundPort}`);
   console.log(`Workspace: ${ROOT_DIR}`);
+  console.log(`Session scope: ${RUNTIME_CONTROL_OPTIONS.sessionScope}`);
+  console.log(`Runtime live updates: ${runtimeLiveUpdates ? 'enabled' : 'disabled'}`);
   console.log(`Providers: ${PROVIDERS_FILE}`);
 });

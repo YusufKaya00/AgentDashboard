@@ -27,7 +27,7 @@ export default function Terminal() {
         {
           id: 'welcome',
           type: 'success',
-          content: 'Nexus Multi-Agent Control Plane [Tnega Version 1.0.0]\nType "help" to view system CLI commands.\nConnection established.',
+          content: 'Tnega Local Agent Runtime Dashboard [Version 0.1.0]\nType "help" to view system CLI commands.\nConnection established.',
           timestamp: new Date().toLocaleTimeString(),
         },
       ],

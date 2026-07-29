@@ -8,9 +8,12 @@ import type {
   RuntimeAgentInput,
   RuntimeId,
   RuntimeOverview,
+  RuntimeSessionMessage,
+  RuntimeSessionSummary,
   RuntimeSkillAssignmentResult,
   RuntimeSkillDefinition,
   RuntimeSkillInput,
+  RuntimeTransmission,
   SkillAssignment,
   WritableRuntimeScope,
 } from '@/types';
@@ -246,6 +249,11 @@ export const api = {
     });
     return res.json();
   },
+  executeHook: async (id: string): Promise<any> => {
+    return requestJson<any>(`${API_BASE}/hooks/${id}/execute`, {
+      method: 'POST',
+    });
+  },
 
   // Models
   getModels: async (): Promise<any[]> => {
@@ -373,14 +381,18 @@ export const api = {
     return res.json();
   },
   
-  // CLI Proxy Sessions
-  getCLISessions: async (): Promise<any[]> => {
-    const res = await fetch(`${API_BASE}/cli/sessions`);
-    return res.json();
+  // Native runtime sessions
+  getRuntimeSessions: async (limit = 240): Promise<RuntimeSessionSummary[]> => {
+    return requestJson<RuntimeSessionSummary[]>(`${API_BASE}/runtimes/sessions?limit=${limit}`);
   },
-  getCLIMessages: async (sessionId: string): Promise<any[]> => {
-    const res = await fetch(`${API_BASE}/cli/sessions/${sessionId}`);
-    return res.json();
+  getRuntimeSessionMessages: async (
+    runtime: RuntimeId,
+    threadId: string,
+    limit = 500
+  ): Promise<RuntimeSessionMessage[]> => {
+    return requestJson<RuntimeSessionMessage[]>(
+      `${API_BASE}/runtimes/${runtime}/sessions/${encodeURIComponent(threadId)}/messages?limit=${limit}`
+    );
   },
 
   // Codex
@@ -407,6 +419,9 @@ export const api = {
   },
   getRuntimeOverview: async (runtime: RuntimeId): Promise<RuntimeOverview> => {
     return requestJson<RuntimeOverview>(`${API_BASE}/runtimes/${runtime}/overview`);
+  },
+  getRuntimeTransmissions: async (limit = 24): Promise<RuntimeTransmission[]> => {
+    return requestJson<RuntimeTransmission[]>(`${API_BASE}/runtimes/activity?limit=${limit}`);
   },
   createRuntimeAgent: async (runtime: RuntimeId, agent: RuntimeAgentInput): Promise<RuntimeAgentDefinition> => {
     return requestJson<RuntimeAgentDefinition>(`${API_BASE}/runtimes/${runtime}/agents`, {
@@ -569,42 +584,73 @@ export const api = {
   },
 };
 
-// WebSocket connection
-export const connectWebSocket = (onMessage: (data: any) => void) => {
-  const host = typeof window !== 'undefined' ? window.location.host.split(':')[0] + ':8000' : '127.0.0.1:8000';
-  const ws = new WebSocket(`ws://${host}/ws`);
-  let heartbeatInterval: NodeJS.Timeout | null = null;
+export type LiveConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'disabled';
 
-  ws.onopen = () => {
-    console.log('WebSocket connected');
-    // Send heartbeat every 15 seconds to keep connection alive
-    heartbeatInterval = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'ping' }));
+// Reconnecting local WebSocket connection for runtime inventory events.
+export const connectWebSocket = (
+  onMessage: (data: any) => void,
+  onStatusChange?: (status: LiveConnectionStatus) => void
+) => {
+  let ws: WebSocket | null = null;
+  let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+  let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  let reconnectDelay = 500;
+  let closed = false;
+
+  const clearConnectionTimers = () => {
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    heartbeatInterval = null;
+    reconnectTimeout = null;
+  };
+
+  const connect = () => {
+    if (closed || typeof window === 'undefined') return;
+    onStatusChange?.('connecting');
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const host = `${window.location.hostname || '127.0.0.1'}:8000`;
+    ws = new WebSocket(`${protocol}://${host}/ws`);
+
+    ws.onopen = () => {
+      reconnectDelay = 500;
+      onStatusChange?.('connected');
+      heartbeatInterval = setInterval(() => {
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 15000);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        onMessage(JSON.parse(event.data));
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
       }
-    }, 15000);
+    };
+
+    ws.onerror = () => {
+      ws?.close();
+    };
+
+    ws.onclose = () => {
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
+      if (closed) return;
+      onStatusChange?.('disconnected');
+      reconnectTimeout = setTimeout(connect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+    };
   };
 
-  ws.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      console.log('WebSocket message:', data);
-      onMessage(data);
-    } catch (e) {
-      console.error('Error parsing WebSocket message:', e);
-    }
-  };
+  connect();
 
-  ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
+  return {
+    close() {
+      closed = true;
+      clearConnectionTimers();
+      ws?.close();
+      ws = null;
+    },
   };
-
-  ws.onclose = () => {
-    console.log('WebSocket disconnected');
-    if (heartbeatInterval) {
-      clearInterval(heartbeatInterval);
-    }
-  };
-
-  return ws;
 };

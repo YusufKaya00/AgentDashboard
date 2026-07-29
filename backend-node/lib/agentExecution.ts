@@ -29,7 +29,7 @@ export const quoteForShell = (value: string) => {
 export const commandForRuntime = (runtime: string, prompt: string) => {
   const safePrompt = quoteForShell(truncateForCommand(prompt));
   if (runtime === 'claude') return `claude -p ${safePrompt}`;
-  if (runtime === 'codex') return `codex run ${safePrompt}`;
+  if (runtime === 'codex') return `codex exec ${safePrompt}`;
   return `antigravity ${safePrompt}`;
 };
 

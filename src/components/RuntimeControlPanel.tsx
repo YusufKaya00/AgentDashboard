@@ -20,6 +20,7 @@ import {
   Network,
   PackagePlus,
   Plus,
+  RadioTower,
   RefreshCw,
   Save,
   Search,
@@ -47,6 +48,10 @@ type PanelView = 'runs' | 'agents' | 'skills' | 'paths';
 
 interface RuntimeControlPanelProps {
   runtime: RuntimeId;
+  initialView?: PanelView;
+  liveConnected?: boolean;
+  liveRevision?: number;
+  onOverviewChange?: (overview: RuntimeOverview) => void;
 }
 
 interface RuntimeTheme {
@@ -457,25 +462,32 @@ function AssignmentEditor({
   onAssign: (
     targetRuntime: RuntimeId,
     targetScope: WritableRuntimeScope,
-    targetAgentId: string
+    targetAgentId: string,
+    targetAgentScope: RuntimeScope
   ) => Promise<void>;
 }) {
   const firstRuntime = overviews.find((item) => item.runtime.id !== source.runtime)?.runtime.id || source.runtime;
   const [targetRuntime, setTargetRuntime] = useState<RuntimeId>(firstRuntime);
   const [targetScope, setTargetScope] = useState<WritableRuntimeScope>('project');
   const selectedOverview = overviews.find((item) => item.runtime.id === targetRuntime);
-  const agents = selectedOverview?.agents.filter(
-    (agent) => agent.editable && agent.scope === targetScope
-  ) || [];
-  const [targetAgentId, setTargetAgentId] = useState('');
-  const selectedAgentId = agents.some((agent) => agent.id === targetAgentId)
-    ? targetAgentId
-    : agents[0]?.id || '';
+  const agents = selectedOverview?.agents.filter((agent) => (
+    (agent.editable && agent.scope === targetScope)
+    || agent.scope === 'legacy'
+  )) || [];
+  const [targetAgentKey, setTargetAgentKey] = useState('');
+  const selectedAgentKey = agents.some(
+    (agent) => `${agent.scope}:${agent.id}` === targetAgentKey
+  )
+    ? targetAgentKey
+    : agents[0] ? `${agents[0].scope}:${agents[0].id}` : '';
+  const selectedAgent = agents.find(
+    (agent) => `${agent.scope}:${agent.id}` === selectedAgentKey
+  );
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!selectedAgentId) return;
-    await onAssign(targetRuntime, targetScope, selectedAgentId);
+    if (!selectedAgent) return;
+    await onAssign(targetRuntime, targetScope, selectedAgent.id, selectedAgent.scope);
   };
 
   return (
@@ -492,7 +504,7 @@ function AssignmentEditor({
               value={targetRuntime}
               onChange={(event) => {
                 setTargetRuntime(event.target.value as RuntimeId);
-                setTargetAgentId('');
+                setTargetAgentKey('');
               }}
               className="select"
             >
@@ -509,7 +521,7 @@ function AssignmentEditor({
               value={targetScope}
               onChange={(event) => {
                 setTargetScope(event.target.value as WritableRuntimeScope);
-                setTargetAgentId('');
+                setTargetAgentKey('');
               }}
               className="select"
             >
@@ -521,13 +533,18 @@ function AssignmentEditor({
         <label className="runtime-field mt-4">
           <span>Target agent</span>
           <select
-            value={selectedAgentId}
-            onChange={(event) => setTargetAgentId(event.target.value)}
+            value={selectedAgentKey}
+            onChange={(event) => setTargetAgentKey(event.target.value)}
             className="select"
             disabled={agents.length === 0}
           >
             {agents.map((agent) => (
-              <option key={`${agent.scope}:${agent.id}`} value={agent.id}>{agent.name}</option>
+              <option
+                key={`${agent.scope}:${agent.id}`}
+                value={`${agent.scope}:${agent.id}`}
+              >
+                {agent.name}{agent.scope === 'legacy' ? ' (import legacy)' : ''}
+              </option>
             ))}
           </select>
         </label>
@@ -536,6 +553,11 @@ function AssignmentEditor({
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
           <div className="text-xs leading-5 text-zinc-400">
             The complete skill package is installed in the target runtime, then the target agent&apos;s native file is updated.
+            {selectedAgent?.scope === 'legacy' && (
+              <span className="mt-1 block text-amber-200">
+                This legacy agent will be imported into the selected {targetScope} native scope first.
+              </span>
+            )}
           </div>
         </div>
 
@@ -548,7 +570,7 @@ function AssignmentEditor({
 
         <footer className="mt-6 flex justify-end gap-2 border-t border-white/8 pt-5">
           <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-          <button type="submit" className="btn btn-primary" disabled={saving || !selectedAgentId}>
+          <button type="submit" className="btn btn-primary" disabled={saving || !selectedAgent}>
             {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
             Install and Assign
           </button>
@@ -615,10 +637,16 @@ function ThreadTree({ threads }: { threads: RuntimeThread[] }) {
   return <div className="space-y-2">{roots.map((thread) => renderThread(thread))}</div>;
 }
 
-export default function RuntimeControlPanel({ runtime }: RuntimeControlPanelProps) {
+export default function RuntimeControlPanel({
+  runtime,
+  initialView = 'runs',
+  liveConnected = false,
+  liveRevision = 0,
+  onOverviewChange,
+}: RuntimeControlPanelProps) {
   const [overview, setOverview] = useState<RuntimeOverview | null>(null);
   const [allOverviews, setAllOverviews] = useState<RuntimeOverview[]>([]);
-  const [view, setView] = useState<PanelView>('runs');
+  const [view, setView] = useState<PanelView>(initialView);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -635,14 +663,16 @@ export default function RuntimeControlPanel({ runtime }: RuntimeControlPanelProp
     if (showRefresh) setRefreshing(true);
     try {
       setError(null);
-      setOverview(await api.getRuntimeOverview(runtime));
+      const nextOverview = await api.getRuntimeOverview(runtime);
+      setOverview(nextOverview);
+      onOverviewChange?.(nextOverview);
     } catch (loadError: unknown) {
       setError(loadError instanceof Error ? loadError.message : 'Runtime data could not be loaded');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [runtime]);
+  }, [onOverviewChange, runtime]);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => {
@@ -650,12 +680,20 @@ export default function RuntimeControlPanel({ runtime }: RuntimeControlPanelProp
     }, 0);
     const interval = window.setInterval(() => {
       if (view === 'runs') void loadOverview();
-    }, 5000);
+    }, 30000);
     return () => {
       window.clearTimeout(initialLoad);
       window.clearInterval(interval);
     };
   }, [loadOverview, view]);
+
+  useEffect(() => {
+    if (liveRevision === 0) return;
+    const liveRefresh = window.setTimeout(() => {
+      void loadOverview();
+    }, 0);
+    return () => window.clearTimeout(liveRefresh);
+  }, [liveRevision, loadOverview]);
 
   const openAssignment = async (skill: RuntimeSkillDefinition) => {
     try {
@@ -744,7 +782,8 @@ export default function RuntimeControlPanel({ runtime }: RuntimeControlPanelProp
   const assignSkill = async (
     targetRuntime: RuntimeId,
     targetScope: WritableRuntimeScope,
-    targetAgentId: string
+    targetAgentId: string,
+    targetAgentScope: RuntimeScope
   ) => {
     if (!assignmentSkill) return;
     setSaving(true);
@@ -755,10 +794,13 @@ export default function RuntimeControlPanel({ runtime }: RuntimeControlPanelProp
         source_skill_id: assignmentSkill.id,
         target_runtime: targetRuntime,
         target_scope: targetScope,
+        target_agent_scope: targetAgentScope,
         target_agent_id: targetAgentId,
       });
       setNotice(
-        `${result.installed_skill.name} installed and assigned (${result.compatibility}).`
+        `${result.installed_skill.name} installed and assigned (${result.compatibility})${
+          result.target_agent_imported ? '; legacy agent imported to native storage' : ''
+        }.`
       );
       setAssignmentSkill(null);
       await loadOverview();
@@ -820,6 +862,17 @@ export default function RuntimeControlPanel({ runtime }: RuntimeControlPanelProp
                 <h2 className="text-xl font-semibold text-white">{theme.label}</h2>
                 <span className={`runtime-badge ${overview.runtime.available ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300' : 'border-amber-400/25 bg-amber-400/10 text-amber-300'}`}>
                   {overview.runtime.available ? 'detected' : 'not initialized'}
+                </span>
+                <span className={`runtime-badge ${
+                  liveConnected
+                    ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300'
+                    : 'border-zinc-600 bg-zinc-800/70 text-zinc-500'
+                }`}>
+                  <RadioTower className="h-3 w-3" />
+                  {liveConnected ? 'live updates' : 'polling fallback'}
+                </span>
+                <span className="runtime-badge border-white/10 bg-white/5 text-zinc-400">
+                  {overview.runtime.session_scope === 'all' ? 'all workspaces' : 'workspace sessions'}
                 </span>
                 <span className="runtime-badge border-white/10 bg-white/5 text-zinc-400">{theme.shortLabel}</span>
               </div>
@@ -981,6 +1034,13 @@ export default function RuntimeControlPanel({ runtime }: RuntimeControlPanelProp
                 </div>
               </article>
             ))}
+            {overview.agents.length === 0 && (
+              <EmptyState
+                icon={Bot}
+                title="No native agents found"
+                detail="Create a project or global agent for this runtime."
+              />
+            )}
           </div>
         </section>
       )}

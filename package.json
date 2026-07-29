@@ -1,12 +1,19 @@
 {
-  "name": "claude-dashboard",
+  "name": "tnega-agent-dashboard",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "dev": "concurrently \"next dev\" \"npm run dev --prefix backend-node\"",
+    "postinstall": "npm install --prefix backend-node --ignore-scripts",
+    "dev": "concurrently --kill-others-on-fail --names web,api \"next dev -H 127.0.0.1 -p 3000\" \"npm run dev --prefix backend-node\"",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "start:web": "next start -H 127.0.0.1 -p 3000",
+    "start": "concurrently --kill-others-on-fail --names web,api \"npm run start:web\" \"npm run start --prefix backend-node\"",
+    "local": "npm run build && npm run start",
+    "lint": "eslint",
+    "verify": "npm run lint && npm test --prefix backend-node && npm run build"
   },
   "dependencies": {
     "lucide-react": "^1.27.0",

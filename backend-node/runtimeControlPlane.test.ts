@@ -11,7 +11,10 @@ import {
   createRuntimeSkill,
   deleteRuntimeAgent,
   deleteRuntimeSkill,
+  getRuntimeSessionMessages,
+  getRuntimeSessions,
   getRuntimeOverview,
+  getRuntimeTransmissions,
   updateRuntimeAgent,
   type RuntimeControlPlaneOptions,
 } from './lib/runtimeControlPlane.js';
@@ -219,6 +222,94 @@ describe('native runtime control plane', () => {
     assert.deepEqual(assignment.target_agent.skills, ['dashboard-claude-portable-review']);
     const agentContent = await fs.readFile(assignment.target_agent.file_path || '', 'utf-8');
     assert.match(agentContent, /skills\/dashboard-claude-portable-review/);
+  });
+
+  it('imports a legacy Antigravity agent before assigning a Codex skill', async () => {
+    await createRuntimeSkill(options, 'codex', {
+      id: 'codex-review',
+      name: 'Codex review',
+      description: 'Portable review instructions',
+      instructions: 'Inspect the change and report evidence.',
+      scope: 'project',
+    });
+    const legacyAgentPath = path.join(
+      options.geminiHome || '',
+      'antigravity',
+      'agents',
+      'legacy-reviewer.md'
+    );
+    const legacyContent = '# Legacy reviewer\n\nReview changes using the existing instructions.\n';
+    await fs.ensureDir(path.dirname(legacyAgentPath));
+    await fs.writeFile(legacyAgentPath, legacyContent, 'utf-8');
+
+    const assignment = await assignRuntimeSkill(options, {
+      source_runtime: 'codex',
+      source_scope: 'project',
+      source_skill_id: 'codex-review',
+      target_runtime: 'antigravity',
+      target_scope: 'global',
+      target_agent_scope: 'legacy',
+      target_agent_id: 'legacy-reviewer',
+    });
+
+    const nativeAgentPath = path.join(
+      options.geminiHome || '',
+      'config',
+      'agents',
+      'legacy-reviewer.md'
+    );
+    assert.equal(assignment.target_agent_imported, true);
+    assert.equal(assignment.target_agent.file_path, nativeAgentPath);
+    assert.equal(await fs.readFile(legacyAgentPath, 'utf-8'), legacyContent);
+    const nativeContent = await fs.readFile(nativeAgentPath, 'utf-8');
+    assert.match(nativeContent, /description: Imported from legacy antigravity agent legacy-reviewer\./);
+    assert.match(nativeContent, /skills\/dashboard-codex-codex-review/);
+    assert.match(nativeContent, /Review changes using the existing instructions\./);
+  });
+
+  it('backs up and promotes an in-place legacy Claude agent during assignment', async () => {
+    await createRuntimeSkill(options, 'codex', {
+      id: 'claude-review',
+      name: 'Claude review',
+      description: 'Review instructions for Claude',
+      instructions: 'Run the focused review workflow.',
+      scope: 'project',
+    });
+    const legacyAgentPath = path.join(
+      options.workspaceDir,
+      '.claude',
+      'agents',
+      'legacy-claude.md'
+    );
+    await fs.ensureDir(path.dirname(legacyAgentPath));
+    await fs.writeFile(
+      legacyAgentPath,
+      '# Legacy Claude\n\nKeep these original agent instructions.\n',
+      'utf-8'
+    );
+
+    const assignment = await assignRuntimeSkill(options, {
+      source_runtime: 'codex',
+      source_scope: 'project',
+      source_skill_id: 'claude-review',
+      target_runtime: 'claude',
+      target_scope: 'project',
+      target_agent_scope: 'legacy',
+      target_agent_id: 'legacy-claude',
+    });
+
+    assert.equal(assignment.target_agent_imported, true);
+    assert.equal(assignment.target_agent.scope, 'project');
+    assert.match(await fs.readFile(legacyAgentPath, 'utf-8'), /skills:\s*\n\s+- dashboard-codex-claude-review/);
+    const backupRoot = path.join(
+      options.workspaceDir,
+      '.claude',
+      '.dashboard-recovery',
+      'agents',
+      'backups'
+    );
+    const backups = await fs.readdir(backupRoot);
+    assert.ok(backups.length >= 1);
   });
 
   it('keeps frontmatter-free legacy markdown read-only', async () => {
@@ -583,16 +674,205 @@ describe('native runtime control plane', () => {
       'child', 'child.jsonl', now, now, 'subagent', deviceWorkspace,
       'Claude audit', 20, 0, 'Audit Agent', 'explorer', 'gpt-test', 'subagent', '', null
     );
+    insertThread.run(
+      'stale-child', 'stale-child.jsonl', now - 3_600, now - 3_600, 'subagent',
+      deviceWorkspace, 'Stale audit', 10, 0, 'Stale Agent', 'explorer',
+      'gpt-test', 'subagent', '', null
+    );
     database.prepare(
       'INSERT INTO thread_spawn_edges (parent_thread_id, child_thread_id, status) VALUES (?, ?, ?)'
     ).run('parent', 'child', 'open');
+    database.prepare(
+      'INSERT INTO thread_spawn_edges (parent_thread_id, child_thread_id, status) VALUES (?, ?, ?)'
+    ).run('parent', 'stale-child', 'open');
     database.close();
 
     const overview = await getRuntimeOverview(options, 'codex');
-    assert.equal(overview.threads.length, 2);
+    assert.equal(overview.threads.length, 3);
     assert.equal(overview.threads.find((thread) => thread.id === 'child')?.parent_id, 'parent');
     assert.equal(overview.threads.find((thread) => thread.id === 'child')?.nickname, 'Audit Agent');
-    assert.deepEqual(overview.edges, [{ parent_id: 'parent', child_id: 'child', status: 'open' }]);
+    assert.equal(overview.threads.find((thread) => thread.id === 'child')?.status, 'running');
+    assert.equal(overview.threads.find((thread) => thread.id === 'stale-child')?.status, 'idle');
+    assert.deepEqual([...overview.edges].sort((left, right) => left.child_id.localeCompare(right.child_id)), [
+      { parent_id: 'parent', child_id: 'child', status: 'open' },
+      { parent_id: 'parent', child_id: 'stale-child', status: 'open' },
+    ]);
+  });
+
+  it('merges native Codex, Claude, and Antigravity messages by timestamp', async () => {
+    const codexTranscript = path.join(tempDir, 'codex-transcript.jsonl');
+    await fs.writeFile(
+      codexTranscript,
+      [
+        JSON.stringify({
+          timestamp: '2026-07-29T10:00:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: 'Codex user message' }],
+          },
+        }),
+        JSON.stringify({
+          timestamp: '2026-07-29T10:00:02.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'function_call',
+            name: 'ignored_tool',
+          },
+        }),
+        JSON.stringify({
+          timestamp: '2026-07-29T10:00:03.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'Codex assistant message' }],
+          },
+        }),
+        '',
+      ].join('\n'),
+      'utf-8'
+    );
+    const sqliteHome = options.codexSqliteHome || '';
+    await fs.ensureDir(sqliteHome);
+    const database = new DatabaseSync(path.join(sqliteHome, 'state_5.sqlite'));
+    database.exec(`
+      CREATE TABLE threads (
+        id TEXT PRIMARY KEY,
+        rollout_path TEXT,
+        created_at INTEGER,
+        updated_at INTEGER,
+        cwd TEXT,
+        title TEXT,
+        archived INTEGER
+      );
+    `);
+    database.prepare(`
+      INSERT INTO threads (id, rollout_path, created_at, updated_at, cwd, title, archived)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'codex-chat',
+      codexTranscript,
+      1785319201,
+      1785319203,
+      options.workspaceDir,
+      'Codex chat',
+      0
+    );
+    database.close();
+
+    const claudeTranscript = path.join(
+      options.claudeHome || '',
+      'projects',
+      'workspace',
+      'claude-chat.jsonl'
+    );
+    await fs.ensureDir(path.dirname(claudeTranscript));
+    await fs.writeFile(
+      claudeTranscript,
+      [
+        JSON.stringify({
+          type: 'user',
+          sessionId: 'claude-chat',
+          cwd: options.workspaceDir,
+          timestamp: '2026-07-29T10:00:04.000Z',
+          message: { role: 'user', content: 'Claude user message' },
+        }),
+        JSON.stringify({
+          type: 'assistant',
+          sessionId: 'claude-chat',
+          cwd: options.workspaceDir,
+          timestamp: '2026-07-29T10:00:05.000Z',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Claude assistant message' }],
+          },
+        }),
+        '',
+      ].join('\n'),
+      'utf-8'
+    );
+
+    const antigravityTranscript = path.join(
+      options.geminiHome || '',
+      'antigravity',
+      'brain',
+      'antigravity-chat',
+      '.system_generated',
+      'logs',
+      'transcript.jsonl'
+    );
+    await fs.ensureDir(path.dirname(antigravityTranscript));
+    await fs.writeFile(
+      antigravityTranscript,
+      [
+        JSON.stringify({
+          type: 'USER_INPUT',
+          created_at: '2026-07-29T10:00:06.000Z',
+          content: '<USER_REQUEST>Antigravity user message</USER_REQUEST>',
+        }),
+        JSON.stringify({
+          type: 'PLANNER_RESPONSE',
+          created_at: '2026-07-29T10:00:07.000Z',
+          content: 'Antigravity assistant message',
+        }),
+        '',
+      ].join('\n'),
+      'utf-8'
+    );
+
+    const transmissions = await getRuntimeTransmissions(
+      { ...options, sessionScope: 'all' },
+      10
+    );
+
+    assert.deepEqual(
+      transmissions.map((item) => `${item.runtime}:${item.role}:${item.message}`),
+      [
+        'antigravity:assistant:Antigravity assistant message',
+        'antigravity:user:Antigravity user message',
+        'claude:assistant:Claude assistant message',
+        'claude:user:Claude user message',
+        'codex:assistant:Codex assistant message',
+        'codex:user:Codex user message',
+      ]
+    );
+
+    const sessions = await getRuntimeSessions(
+      { ...options, sessionScope: 'all' },
+      10
+    );
+    assert.deepEqual(
+      sessions.map((item) => `${item.runtime}:${item.thread_id}`).sort(),
+      [
+        'antigravity:antigravity-chat',
+        'claude:claude-chat',
+        'codex:codex-chat',
+      ]
+    );
+
+    const claudeMessages = await getRuntimeSessionMessages(
+      { ...options, sessionScope: 'all' },
+      'claude',
+      'claude-chat'
+    );
+    assert.deepEqual(
+      claudeMessages.map((item) => `${item.role}:${item.content}`),
+      [
+        'user:Claude user message',
+        'assistant:Claude assistant message',
+      ]
+    );
+
+    await assert.rejects(
+      () => getRuntimeSessionMessages(
+        { ...options, sessionScope: 'all' },
+        'codex',
+        '../outside'
+      ),
+      /Session not found/
+    );
   });
 
   it('filters Codex threads by workspace before limiting and tolerates a missing edge table', async () => {
@@ -653,6 +933,16 @@ describe('native runtime control plane', () => {
     assert.equal(
       overview.diagnostics.some((diagnostic) => diagnostic.code === 'codex_sqlite_unreadable'),
       false
+    );
+
+    const allWorkspacesOverview = await getRuntimeOverview(
+      { ...options, sessionScope: 'all' },
+      'codex'
+    );
+    assert.equal(allWorkspacesOverview.runtime.session_scope, 'all');
+    assert.equal(allWorkspacesOverview.threads.length, 500);
+    assert.ok(
+      allWorkspacesOverview.threads.every((thread) => thread.id.startsWith('unrelated-'))
     );
   });
 });

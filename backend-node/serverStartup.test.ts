@@ -4,6 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
+import { WebSocket } from 'ws';
 
 const spawnedChildren = new Set<ChildProcess>();
 const temporaryRoots = new Set<string>();
@@ -17,13 +18,19 @@ afterEach(async () => {
   temporaryRoots.clear();
 });
 
-const startIsolatedServer = async () => {
+interface IsolatedServerOptions {
+  enableRuntimeLiveUpdates?: boolean;
+  prepare?: (paths: { homeDir: string; workspaceDir: string }) => Promise<void>;
+}
+
+const startIsolatedServer = async (options: IsolatedServerOptions = {}) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'runtime-server-'));
   temporaryRoots.add(root);
   const homeDir = path.join(root, 'home');
   const workspaceDir = path.join(root, 'workspace');
   await fs.ensureDir(homeDir);
   await fs.ensureDir(workspaceDir);
+  await options.prepare?.({ homeDir, workspaceDir });
 
   const child = spawn(
     process.execPath,
@@ -38,6 +45,7 @@ const startIsolatedServer = async () => {
         WORKSPACE_DIR: workspaceDir,
         ENABLE_LEGACY_BOOTSTRAP: 'false',
         ENABLE_FILE_WATCHER: 'false',
+        ENABLE_RUNTIME_LIVE_UPDATES: options.enableRuntimeLiveUpdates ? 'true' : 'false',
         INSTALL_GIT_HOOKS: 'false',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -126,5 +134,91 @@ describe('server startup safety', () => {
     }
 
     await stopServer(child);
+  });
+
+  it('streams native runtime changes through the local WebSocket', async () => {
+    const { baseUrl, child, homeDir, workspaceDir } = await startIsolatedServer({
+      enableRuntimeLiveUpdates: true,
+      prepare: async ({ homeDir: preparedHome }) => {
+        await fs.ensureDir(path.join(preparedHome, '.claude', 'projects', 'workspace'));
+      },
+    });
+    const socket = new WebSocket(`${baseUrl.replace('http://', 'ws://')}/ws`);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('WebSocket connection timed out')), 5_000);
+        socket.once('open', () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+        socket.once('error', reject);
+      });
+
+      const runtimeEvent = new Promise<{
+        type: string;
+        runtime: string;
+        categories: string[];
+      }>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Runtime WebSocket event timed out')), 5_000);
+        socket.on('message', (data) => {
+          const message = JSON.parse(data.toString()) as {
+            type?: string;
+            runtime?: string;
+            categories?: string[];
+          };
+          if (
+            message.type !== 'runtime-inventory-changed'
+            || message.runtime !== 'claude'
+            || !message.categories?.includes('sessions')
+          ) {
+            return;
+          }
+          clearTimeout(timeout);
+          resolve({
+            type: message.type,
+            runtime: message.runtime,
+            categories: message.categories,
+          });
+        });
+      });
+
+      const transcriptPath = path.join(
+        homeDir,
+        '.claude',
+        'projects',
+        'workspace',
+        'server-live-session.jsonl'
+      );
+      await fs.writeFile(
+        transcriptPath,
+        `${JSON.stringify({
+          type: 'user',
+          sessionId: 'server-live-session',
+          cwd: workspaceDir,
+          timestamp: new Date().toISOString(),
+          message: { content: 'Stream this runtime change' },
+        })}\n`
+      );
+
+      const streamedUpdate = await runtimeEvent;
+      assert.equal(streamedUpdate.type, 'runtime-inventory-changed');
+      assert.equal(streamedUpdate.runtime, 'claude');
+      assert.ok(streamedUpdate.categories.includes('sessions'));
+
+      const overviewResponse = await fetch(`${baseUrl}/api/runtimes/claude/overview`);
+      assert.equal(overviewResponse.status, 200);
+      const overview = await overviewResponse.json() as {
+        threads: Array<{ id: string; status: string }>;
+      };
+      assert.ok(
+        overview.threads.some((thread) => (
+          thread.id === 'server-live-session' && thread.status === 'running'
+        ))
+      );
+    } finally {
+      socket.close();
+      await stopServer(child);
+    }
   });
 });

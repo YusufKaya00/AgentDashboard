@@ -31,12 +31,12 @@ describe('agent execution planning', () => {
     assert.match(plan.prompt, /least privilege IAM/);
     assert.match(plan.prompt, /OPS-17/);
     assert.match(plan.prompt, /Review this deployment plan/);
-    assert.match(plan.command_preview, /^codex run /);
+    assert.match(plan.command_preview, /^codex exec /);
   });
 
   it('uses runtime-specific commands', () => {
     assert.match(commandForRuntime('claude', 'hello'), /^claude -p /);
-    assert.match(commandForRuntime('codex', 'hello'), /^codex run /);
+    assert.match(commandForRuntime('codex', 'hello'), /^codex exec /);
     assert.match(commandForRuntime('antigravity', 'hello'), /^antigravity /);
   });
 });

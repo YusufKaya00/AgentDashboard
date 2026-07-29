@@ -10,6 +10,7 @@ export type RuntimeId = 'codex' | 'claude' | 'antigravity';
 export type RuntimeScope = 'builtin' | 'system' | 'plugin' | 'global' | 'project' | 'legacy';
 export type WritableRuntimeScope = 'global' | 'project';
 export type RuntimeThreadStatus = 'running' | 'idle' | 'completed' | 'failed' | 'archived' | 'unknown';
+export type RuntimeSessionScope = 'all' | 'workspace';
 
 export interface RuntimeControlPlaneOptions {
   homeDir: string;
@@ -18,6 +19,7 @@ export interface RuntimeControlPlaneOptions {
   codexSqliteHome?: string;
   claudeHome?: string;
   geminiHome?: string;
+  sessionScope?: RuntimeSessionScope;
 }
 
 export interface RuntimeAgentDefinition {
@@ -74,6 +76,44 @@ export interface RuntimeThreadEdge {
   status: string;
 }
 
+export interface RuntimeTransmission {
+  id: string;
+  runtime: RuntimeId;
+  thread_id: string;
+  role: 'user' | 'assistant';
+  message: string;
+  timestamp: string;
+  agent_name: string | null;
+  is_subagent: boolean;
+}
+
+export interface RuntimeSessionSummary {
+  id: string;
+  runtime: RuntimeId;
+  thread_id: string;
+  title: string;
+  status: RuntimeThreadStatus;
+  workspace: string | null;
+  model: string | null;
+  agent_name: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  is_subagent: boolean;
+  inferred: boolean;
+}
+
+export interface RuntimeSessionMessage {
+  id: string;
+  runtime: RuntimeId;
+  thread_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  model: string | null;
+  agent_name: string | null;
+  is_subagent: boolean;
+}
+
 export interface RuntimePaths {
   home: string;
   workspace: string;
@@ -102,6 +142,7 @@ export interface RuntimeOverview {
     available: boolean;
     workspace_dir: string;
     home_dir: string;
+    session_scope: RuntimeSessionScope;
   };
   paths: RuntimePaths;
   capabilities: {
@@ -150,6 +191,7 @@ export interface AssignRuntimeSkillInput {
   source_skill_id: string;
   target_runtime: RuntimeId;
   target_scope: WritableRuntimeScope;
+  target_agent_scope?: RuntimeScope;
   target_agent_id: string;
 }
 
@@ -161,6 +203,7 @@ export interface RuntimeSkillAssignmentResult {
   warnings: string[];
   installed_path: string;
   assigned_at: string;
+  target_agent_imported: boolean;
 }
 
 interface MarkdownDocument {
@@ -414,6 +457,7 @@ const validateSkillAssignmentInput = (value: unknown): AssignRuntimeSkillInput =
     source_skill_id: assertLookupId(requiredInputString(record, 'source_skill_id', 200)),
     target_runtime: normalizeRuntimeId(requiredInputString(record, 'target_runtime', 40)),
     target_scope: assertWritableScope(requiredInputString(record, 'target_scope', 20)),
+    target_agent_scope: assertRuntimeScope(record.target_agent_scope ?? record.target_scope),
     target_agent_id: assertSafeId(requiredInputString(record, 'target_agent_id', 80)),
   };
 };
@@ -1003,7 +1047,8 @@ const findNewestStateDatabase = async (sqliteHome: string): Promise<string | nul
 
 const readCodexThreads = async (
   paths: RuntimePaths,
-  workspaceDir: string
+  workspaceDir: string,
+  sessionScope: RuntimeSessionScope
 ): Promise<RuntimeThreadInventory> => {
   const diagnostics: RuntimeOverview['diagnostics'] = [];
   const databasePath = await findNewestStateDatabase(paths.sqlite_home || paths.home);
@@ -1058,18 +1103,28 @@ const readCodexThreads = async (
     const normalizedWorkspace = normalizePathForMatch(workspaceDir);
     const selectColumns = desiredColumns.map((column) => `"${column}"`).join(', ');
     const normalizedCwdSql = `replace(lower(replace("cwd", char(92), '/')), '//?/', '')`;
-    const workspaceRows = db
-      .prepare(`
-        SELECT ${selectColumns}
-        FROM threads
-        WHERE ${normalizedCwdSql} = ?
-           OR instr(${normalizedCwdSql}, ? || '/') = 1
-        ORDER BY ${orderColumn} DESC
-        LIMIT 500
-      `)
-      .all(normalizedWorkspace, normalizedWorkspace)
-      .map(asRecord)
-      .filter((row) => workspaceMatches(row.cwd, workspaceDir));
+    const workspaceRows = sessionScope === 'all'
+      ? db
+          .prepare(`
+            SELECT ${selectColumns}
+            FROM threads
+            ORDER BY ${orderColumn} DESC
+            LIMIT 500
+          `)
+          .all()
+          .map(asRecord)
+      : db
+          .prepare(`
+            SELECT ${selectColumns}
+            FROM threads
+            WHERE ${normalizedCwdSql} = ?
+               OR instr(${normalizedCwdSql}, ? || '/') = 1
+            ORDER BY ${orderColumn} DESC
+            LIMIT 500
+          `)
+          .all(normalizedWorkspace, normalizedWorkspace)
+          .map(asRecord)
+          .filter((row) => workspaceMatches(row.cwd, workspaceDir));
     const workspaceIds = new Set(workspaceRows.map((row) => asString(row.id)).filter(Boolean));
     const edgeTableExists = Boolean(db.prepare(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'thread_spawn_edges'"
@@ -1132,10 +1187,15 @@ const readCodexThreads = async (
       const parentEdge = parentByChild.get(id);
       const updatedAt = toIsoDate(row.updated_at);
       const archived = Number(row.archived || 0) === 1;
-      let status: RuntimeThreadStatus = archived ? 'archived' : isRecent(updatedAt, 5 * 60 * 1000) ? 'running' : 'idle';
+      const recentlyObserved = isRecent(updatedAt, 2 * 60 * 1000);
+      let status: RuntimeThreadStatus = archived ? 'archived' : recentlyObserved ? 'running' : 'idle';
       if (parentEdge?.status) {
         const edgeStatus = parentEdge.status.toLowerCase();
-        if (edgeStatus === 'open' || edgeStatus === 'running') status = 'running';
+        // Codex can leave spawn edges open after work stops, so recency is also
+        // required before presenting an open child as actively running.
+        if (edgeStatus === 'open' || edgeStatus === 'running') {
+          status = recentlyObserved ? 'running' : 'idle';
+        }
         else if (edgeStatus === 'failed' || edgeStatus === 'error') status = 'failed';
         else if (edgeStatus === 'closed' || edgeStatus === 'completed') status = 'completed';
       }
@@ -1212,7 +1272,8 @@ const recentSessionFiles = async (
 
 const readClaudeThreads = async (
   paths: RuntimePaths,
-  workspaceDir: string
+  workspaceDir: string,
+  sessionScope: RuntimeSessionScope
 ): Promise<RuntimeThreadInventory> => {
   const diagnostics: RuntimeOverview['diagnostics'] = [];
   const files = await recentSessionFiles(paths.session_roots, (filePath) => filePath.endsWith('.jsonl'), 3);
@@ -1228,7 +1289,7 @@ const readClaudeThreads = async (
       encodedParent.includes(workspaceSlug)
       || workspaceSlug.includes(encodedParent.replace(/^-|-$/g, ''))
     );
-    if (!workspaceMatches(cwd, workspaceDir) && !slugMatches) continue;
+    if (sessionScope === 'workspace' && !workspaceMatches(cwd, workspaceDir) && !slugMatches) continue;
 
     const firstUserRecord = records.find((record) => asString(record.type).toLowerCase() === 'user');
     const message = asRecord(firstUserRecord?.message);
@@ -1263,7 +1324,7 @@ const readClaudeThreads = async (
     if (parentId) edges.push({ parent_id: parentId, child_id: id, status: 'observed' });
   }
 
-  if (threads.length === 0 && files.length > 0) {
+  if (sessionScope === 'workspace' && threads.length === 0 && files.length > 0) {
     diagnostics.push({
       level: 'info',
       code: 'claude_workspace_sessions_missing',
@@ -1294,7 +1355,8 @@ const toolCallsFromRecord = (record: Record<string, unknown>): Array<{ name: str
 
 const readAntigravityThreads = async (
   paths: RuntimePaths,
-  workspaceDir: string
+  workspaceDir: string,
+  sessionScope: RuntimeSessionScope
 ): Promise<RuntimeThreadInventory> => {
   const diagnostics: RuntimeOverview['diagnostics'] = [];
   const files = await recentSessionFiles(
@@ -1315,6 +1377,8 @@ const readAntigravityThreads = async (
     const workspaceForward = workspaceWindows.replace(/\\/g, '/');
     const workspaceName = path.basename(workspaceDir).toLowerCase();
     if (
+      sessionScope === 'workspace'
+      &&
       !normalizedContent.includes(workspaceWindows)
       && !normalizedContent.includes(workspaceForward)
       && !normalizedContent.includes(workspaceName)
@@ -1347,7 +1411,7 @@ const readAntigravityThreads = async (
       parent_id: parentId,
       title,
       status: isRecent(file.updatedAt, 5 * 60 * 1000) ? 'running' : 'idle',
-      workspace: workspaceDir,
+      workspace: sessionScope === 'workspace' ? workspaceDir : null,
       model: modelSetting,
       role: parentId ? 'subagent' : null,
       nickname: null,
@@ -1368,7 +1432,7 @@ const readAntigravityThreads = async (
       code: 'antigravity_transcripts_missing',
       message: 'No Antigravity transcript logs were found in the known desktop, IDE, or CLI roots.',
     });
-  } else if (threads.length === 0) {
+  } else if (sessionScope === 'workspace' && threads.length === 0) {
     diagnostics.push({
       level: 'info',
       code: 'antigravity_workspace_transcripts_missing',
@@ -1381,11 +1445,12 @@ const readAntigravityThreads = async (
 const readRuntimeThreads = async (
   paths: RuntimePaths,
   runtime: RuntimeId,
-  workspaceDir: string
+  workspaceDir: string,
+  sessionScope: RuntimeSessionScope
 ): Promise<RuntimeThreadInventory> => {
-  if (runtime === 'codex') return readCodexThreads(paths, workspaceDir);
-  if (runtime === 'claude') return readClaudeThreads(paths, workspaceDir);
-  return readAntigravityThreads(paths, workspaceDir);
+  if (runtime === 'codex') return readCodexThreads(paths, workspaceDir, sessionScope);
+  if (runtime === 'claude') return readClaudeThreads(paths, workspaceDir, sessionScope);
+  return readAntigravityThreads(paths, workspaceDir, sessionScope);
 };
 
 export const getRuntimeOverview = async (
@@ -1394,10 +1459,11 @@ export const getRuntimeOverview = async (
 ): Promise<RuntimeOverview> => {
   const runtime = normalizeRuntimeId(runtimeValue);
   const paths = await discoverRuntimePaths(options, runtime);
+  const sessionScope = options.sessionScope || 'workspace';
   const [agents, skills, threadInventory] = await Promise.all([
     listRuntimeAgents(paths, runtime),
     listRuntimeSkills(paths, runtime),
-    readRuntimeThreads(paths, runtime, paths.workspace),
+    readRuntimeThreads(paths, runtime, paths.workspace, sessionScope),
   ]);
   const [homeAvailable, projectAvailable] = await Promise.all([
     fs.pathExists(paths.home),
@@ -1431,6 +1497,7 @@ export const getRuntimeOverview = async (
       available,
       workspace_dir: paths.workspace,
       home_dir: paths.home,
+      session_scope: sessionScope,
     },
     paths,
     capabilities: {
@@ -1457,6 +1524,218 @@ export const getAllRuntimeOverviews = async (
   );
 };
 
+const transmissionText = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        const record = asRecord(item);
+        const type = asString(record.type).toLowerCase();
+        if (
+          type
+          && type !== 'text'
+          && type !== 'input_text'
+          && type !== 'output_text'
+        ) {
+          return '';
+        }
+        return transmissionText(record.text ?? record.content ?? item);
+      })
+      .filter(Boolean)
+      .join(' ');
+  }
+  const record = asRecord(value);
+  if (typeof record.text === 'string') return record.text;
+  if (record.content !== value) return transmissionText(record.content);
+  return '';
+};
+
+const cleanTransmissionText = (value: unknown, limit = 320): string => {
+  return transmissionText(value)
+    .replace(/<in-app-browser-context[\s\S]*?<\/in-app-browser-context>/gi, ' ')
+    .replace(/<ADDITIONAL_METADATA>[\s\S]*$/gi, ' ')
+    .replace(/<\/?USER_REQUEST>/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, limit);
+};
+
+const transmissionFromRecord = (
+  runtime: RuntimeId,
+  thread: RuntimeThread,
+  record: Record<string, unknown>,
+  textLimit = 320
+): Omit<RuntimeTransmission, 'id'> | null => {
+  let role: RuntimeTransmission['role'] | null = null;
+  let message = '';
+
+  if (runtime === 'codex') {
+    const payload = asRecord(record.payload);
+    if (asString(record.type) !== 'response_item' || asString(payload.type) !== 'message') {
+      return null;
+    }
+    const payloadRole = asString(payload.role).toLowerCase();
+    if (payloadRole !== 'user' && payloadRole !== 'assistant') return null;
+    role = payloadRole;
+    message = cleanTransmissionText(payload.content, textLimit);
+  } else if (runtime === 'claude') {
+    const recordType = asString(record.type).toLowerCase();
+    const messageRecord = asRecord(record.message);
+    const messageRole = asString(messageRecord.role || record.role || recordType).toLowerCase();
+    if (messageRole !== 'user' && messageRole !== 'assistant') return null;
+    role = messageRole;
+    message = cleanTransmissionText(messageRecord.content ?? record.content, textLimit);
+  } else {
+    const recordType = asString(record.type);
+    if (recordType === 'USER_INPUT') role = 'user';
+    else if (recordType === 'PLANNER_RESPONSE') role = 'assistant';
+    else return null;
+    message = cleanTransmissionText(record.content, textLimit);
+  }
+
+  const timestamp = toIsoDate(record.timestamp || record.created_at);
+  if (!role || !message || !timestamp) return null;
+  return {
+    runtime,
+    thread_id: thread.id,
+    role,
+    message,
+    timestamp,
+    agent_name: thread.nickname || thread.role || null,
+    is_subagent: thread.is_subagent,
+  };
+};
+
+export const getRuntimeTransmissions = async (
+  options: RuntimeControlPlaneOptions,
+  limit = 24
+): Promise<RuntimeTransmission[]> => {
+  const safeLimit = Math.min(Math.max(Math.trunc(limit) || 24, 1), 300);
+  const overviews = await getAllRuntimeOverviews(options);
+  const transmissions = (
+    await Promise.all(overviews.flatMap((overview) => (
+      overview.threads
+        .filter((thread) => Boolean(thread.transcript_path))
+        .sort((left, right) => (right.updated_at || '').localeCompare(left.updated_at || ''))
+        .slice(0, 12)
+        .map(async (thread) => {
+          const transcriptPath = thread.transcript_path;
+          if (!transcriptPath) return [];
+          const content = await readTail(transcriptPath, 512 * 1024).catch(() => '');
+          return parseJsonLines(content)
+            .map((record) => transmissionFromRecord(overview.runtime.id, thread, record))
+            .filter((item): item is Omit<RuntimeTransmission, 'id'> => Boolean(item))
+            .slice(-Math.max(safeLimit, 12));
+        })
+    )))
+  ).flat();
+
+  const unique = new Map<string, RuntimeTransmission>();
+  for (const transmission of transmissions) {
+    const digest = createHash('sha256')
+      .update([
+        transmission.runtime,
+        transmission.thread_id,
+        transmission.role,
+        transmission.timestamp,
+        transmission.message,
+      ].join('\0'))
+      .digest('hex')
+      .slice(0, 16);
+    unique.set(`${transmission.runtime}:${digest}`, {
+      ...transmission,
+      id: `${transmission.runtime}:${digest}`,
+    });
+  }
+
+  const perRuntimeLimit = Math.ceil(safeLimit / 3);
+  const balanced = (['codex', 'claude', 'antigravity'] as const)
+    .flatMap((runtime) => Array.from(unique.values())
+      .filter((item) => item.runtime === runtime)
+      .sort((left, right) => right.timestamp.localeCompare(left.timestamp))
+      .slice(0, perRuntimeLimit));
+
+  return balanced
+    .sort((left, right) => right.timestamp.localeCompare(left.timestamp))
+    .slice(0, safeLimit);
+};
+
+export const getRuntimeSessions = async (
+  options: RuntimeControlPlaneOptions,
+  limit = 240
+): Promise<RuntimeSessionSummary[]> => {
+  const safeLimit = Math.min(Math.max(Math.trunc(limit) || 240, 1), 500);
+  const overviews = await getAllRuntimeOverviews(options);
+
+  return overviews
+    .flatMap((overview) => overview.threads
+      .filter((thread) => Boolean(thread.transcript_path))
+      .map((thread): RuntimeSessionSummary => ({
+        id: `${overview.runtime.id}:${thread.id}`,
+        runtime: overview.runtime.id,
+        thread_id: thread.id,
+        title: thread.title,
+        status: thread.status,
+        workspace: thread.workspace,
+        model: thread.model,
+        agent_name: thread.nickname || thread.role || null,
+        created_at: thread.created_at,
+        updated_at: thread.updated_at,
+        is_subagent: thread.is_subagent,
+        inferred: thread.inferred,
+      })))
+    .sort((left, right) => (
+      right.updated_at || right.created_at || ''
+    ).localeCompare(left.updated_at || left.created_at || ''))
+    .slice(0, safeLimit);
+};
+
+export const getRuntimeSessionMessages = async (
+  options: RuntimeControlPlaneOptions,
+  runtimeValue: RuntimeId | string,
+  threadId: string,
+  limit = 500
+): Promise<RuntimeSessionMessage[]> => {
+  const runtime = normalizeRuntimeId(runtimeValue);
+  const safeLimit = Math.min(Math.max(Math.trunc(limit) || 500, 1), 1000);
+  const overview = await getRuntimeOverview(options, runtime);
+  const thread = overview.threads.find((item) => item.id === threadId);
+  if (!thread?.transcript_path) {
+    throw new Error(`Session not found: ${runtime}/${threadId}`);
+  }
+
+  const content = await readTail(thread.transcript_path, MAX_TRANSCRIPT_BYTES);
+  return parseJsonLines(content)
+    .map((record, index) => {
+      const transmission = transmissionFromRecord(runtime, thread, record, 12_000);
+      if (!transmission) return null;
+      const digest = createHash('sha256')
+        .update([
+          runtime,
+          thread.id,
+          String(index),
+          transmission.role,
+          transmission.timestamp,
+          transmission.message,
+        ].join('\0'))
+        .digest('hex')
+        .slice(0, 16);
+      return {
+        id: `${runtime}:${digest}`,
+        runtime,
+        thread_id: thread.id,
+        role: transmission.role,
+        content: transmission.message,
+        timestamp: transmission.timestamp,
+        model: thread.model,
+        agent_name: transmission.agent_name,
+        is_subagent: transmission.is_subagent,
+      } satisfies RuntimeSessionMessage;
+    })
+    .filter((item): item is RuntimeSessionMessage => Boolean(item))
+    .slice(-safeLimit);
+};
+
 const findAgent = async (
   options: RuntimeControlPlaneOptions,
   runtime: RuntimeId,
@@ -1468,6 +1747,15 @@ const findAgent = async (
   const agent = agents.find((item) => item.scope === scope && item.id === id);
   if (!agent) throw new Error(`Agent not found: ${runtime}/${scope}/${id}`);
   return agent;
+};
+
+export const getRuntimeAgentDefinition = async (
+  options: RuntimeControlPlaneOptions,
+  runtimeValue: RuntimeId | string,
+  scope: RuntimeScope,
+  id: string
+): Promise<RuntimeAgentDefinition> => {
+  return findAgent(options, normalizeRuntimeId(runtimeValue), scope, id);
 };
 
 const findSkill = async (
@@ -1858,16 +2146,58 @@ export const assignRuntimeSkill = async (
   const targetScope = validated.target_scope;
   const sourceSkillId = validated.source_skill_id;
   const targetAgentId = validated.target_agent_id;
+  const targetAgentScope = validated.target_agent_scope || targetScope;
   const source = await findSkill(options, sourceRuntime, validated.source_scope, sourceSkillId);
-  const targetAgent = await findAgent(options, targetRuntime, targetScope, targetAgentId);
-  if (!targetAgent.editable) throw new Error(`Target agent is read-only: ${targetAgentId}`);
+  const targetAgent = await findAgent(options, targetRuntime, targetAgentScope, targetAgentId);
+  if (!targetAgent.editable && targetAgent.scope !== 'legacy') {
+    throw new Error(`Target agent cannot be imported or edited: ${targetAgentId}`);
+  }
+  if (targetAgent.editable && targetAgent.scope !== targetScope) {
+    throw new Error(
+      `Editable target agent scope must match the install scope: ${targetAgent.scope} !== ${targetScope}`
+    );
+  }
 
   const installedId = slugify(`dashboard-${sourceRuntime}-${source.id}`);
   const targetPaths = await discoverRuntimePaths(options, targetRuntime);
   const targetSkillLocation = managedSkillLocation(targetPaths, targetScope);
   const targetAgentLocation = managedAgentLocation(targetPaths, targetScope);
-  if (!targetAgent.file_path) throw new Error(`Target agent is read-only: ${targetAgentId}`);
-  const originalAgentContent = await fs.readFile(targetAgent.file_path, 'utf-8');
+  const targetAgentImported = targetAgent.scope === 'legacy';
+  const destinationAgentId = targetAgentImported
+    ? normalizeNativeAgentName(targetRuntime, targetAgent.id)
+    : targetAgent.id;
+  const destinationAgentPath = targetAgentImported
+    ? agentFilePath(targetPaths, targetRuntime, targetScope, destinationAgentId)
+    : targetAgent.file_path;
+  if (!destinationAgentPath) throw new Error(`Target agent is read-only: ${targetAgentId}`);
+
+  const legacyUsesDestination = Boolean(
+    targetAgentImported
+    && targetAgent.file_path
+    && normalizePathForMatch(targetAgent.file_path) === normalizePathForMatch(destinationAgentPath)
+  );
+  if (
+    targetAgentImported
+    && !legacyUsesDestination
+    && await fs.pathExists(destinationAgentPath)
+  ) {
+    throw new Error(
+      `A native ${targetRuntime}/${targetScope}/${destinationAgentId} agent already exists; select that agent instead`
+    );
+  }
+
+  const originalAgentContent = await fs.readFile(destinationAgentPath, 'utf-8').catch(() => null);
+  const existingForWrite = targetAgentImported
+    ? legacyUsesDestination
+      ? {
+          ...targetAgent,
+          id: destinationAgentId,
+          scope: targetScope,
+          editable: true,
+          file_path: destinationAgentPath,
+        }
+      : undefined
+    : targetAgent;
   let copiedPackage: CopiedSkillPackage | null = null;
 
   try {
@@ -1887,17 +2217,19 @@ export const assignRuntimeSkill = async (
       options,
       targetRuntime,
       targetScope,
-      targetAgent.id,
+      destinationAgentId,
       {
         name: targetAgent.name,
-        description: targetAgent.description,
+        description: targetAgent.description
+          || `Imported from legacy ${targetRuntime} agent ${targetAgent.id}.`,
         instructions: targetAgent.instructions,
         model: targetAgent.model,
         scope: targetScope,
         skills: uniqueStrings([...targetAgent.skills, installedId]),
         tools: targetAgent.tools,
+        metadata: targetAgent.metadata,
       },
-      targetAgent
+      existingForWrite
     );
     const installedSkill = await readRuntimeSkill(targetRuntime, installedPath, targetScope);
     if (!installedSkill) throw new Error('Installed skill could not be read after assignment');
@@ -1921,6 +2253,7 @@ export const assignRuntimeSkill = async (
       warnings,
       installed_path: installedPath,
       assigned_at: new Date().toISOString(),
+      target_agent_imported: targetAgentImported,
     };
   } catch (error: unknown) {
     const rollbackErrors: string[] = [];
@@ -1938,12 +2271,18 @@ export const assignRuntimeSkill = async (
         });
       }
     }
-    const currentAgentContent = await fs.readFile(targetAgent.file_path, 'utf-8').catch(() => null);
+    const currentAgentContent = await fs.readFile(destinationAgentPath, 'utf-8').catch(() => null);
     if (currentAgentContent !== originalAgentContent) {
-      await atomicWriteFile(targetAgentLocation, targetAgent.file_path, originalAgentContent)
-        .catch((rollbackError: unknown) => {
-          rollbackErrors.push(`restore target agent: ${String(rollbackError)}`);
+      if (originalAgentContent === null) {
+        await fs.remove(destinationAgentPath).catch((rollbackError: unknown) => {
+          rollbackErrors.push(`remove imported target agent: ${String(rollbackError)}`);
         });
+      } else {
+        await atomicWriteFile(targetAgentLocation, destinationAgentPath, originalAgentContent)
+          .catch((rollbackError: unknown) => {
+            rollbackErrors.push(`restore target agent: ${String(rollbackError)}`);
+          });
+      }
     }
 
     if (rollbackErrors.length > 0) {

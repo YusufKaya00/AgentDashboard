@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Nexus | Multi-Agent Control Plane",
-  description: "Unified autonomous agent orchestration platform for Claude CLI, Codex, and Antigravity core.",
+  title: "Tnega | Local Agent Runtime Dashboard",
+  description: "Local-first observability and native agent/skill management for Codex, Claude Code, and Gemini Antigravity.",
 };
 
 export default function RootLayout({

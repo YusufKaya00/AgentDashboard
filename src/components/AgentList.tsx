@@ -22,14 +22,20 @@ const statusStyle = (status: Agent['status']) => {
 };
 
 export default function AgentList({ agents, onRefresh, showAll = false }: AgentListProps) {
-  const displayed = showAll ? agents : agents.slice(0, 12);
+  const displayed = showAll
+    ? agents
+    : RUNTIMES.flatMap((runtime) => (
+        agents.filter((agent) => agent.runtime === runtime.id).slice(0, 4)
+      ));
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h2 className="runtime-section-title">Agent registry</h2>
-          <p className="runtime-section-meta">{displayed.length} runtime records</p>
+          <p className="runtime-section-meta">
+            {showAll ? agents.length : `${displayed.length} of ${agents.length}`} runtime records
+          </p>
         </div>
         <button className="icon-button" onClick={onRefresh} title="Refresh agents" aria-label="Refresh agents">
           <RefreshCw className="h-4 w-4" />
@@ -39,6 +45,7 @@ export default function AgentList({ agents, onRefresh, showAll = false }: AgentL
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {RUNTIMES.map((runtime) => {
           const runtimeAgents = displayed.filter((agent) => agent.runtime === runtime.id);
+          const totalRuntimeAgents = agents.filter((agent) => agent.runtime === runtime.id).length;
           return (
             <section key={runtime.id} className="runtime-panel overflow-hidden">
               <header className="flex h-14 items-center justify-between border-b border-white/8 px-4">
@@ -47,7 +54,7 @@ export default function AgentList({ agents, onRefresh, showAll = false }: AgentL
                   <p className="mt-0.5 font-mono text-[10px] text-zinc-600">{runtime.path}</p>
                 </div>
                 <span className="runtime-badge border-white/10 bg-white/5 text-zinc-500">
-                  {runtimeAgents.length}
+                  {totalRuntimeAgents}
                 </span>
               </header>
 

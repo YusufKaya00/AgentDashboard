@@ -2,6 +2,20 @@
 
 import RuntimeControlPanel from './RuntimeControlPanel';
 
-export default function CodexControlPanel() {
-  return <RuntimeControlPanel runtime="codex" />;
+interface CodexControlPanelProps {
+  liveConnected?: boolean;
+  liveRevision?: number;
+}
+
+export default function CodexControlPanel({
+  liveConnected,
+  liveRevision,
+}: CodexControlPanelProps) {
+  return (
+    <RuntimeControlPanel
+      runtime="codex"
+      liveConnected={liveConnected}
+      liveRevision={liveRevision}
+    />
+  );
 }

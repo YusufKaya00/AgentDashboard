@@ -5,7 +5,15 @@ import { FileText, Network } from 'lucide-react';
 import RuntimeControlPanel from './RuntimeControlPanel';
 import CLAUDEEditor from './CLAUDEEditor';
 
-export default function ClaudeControlPanel() {
+interface ClaudeControlPanelProps {
+  liveConnected?: boolean;
+  liveRevision?: number;
+}
+
+export default function ClaudeControlPanel({
+  liveConnected,
+  liveRevision,
+}: ClaudeControlPanelProps) {
   const [view, setView] = useState<'runtime' | 'guidelines'>('runtime');
 
   return (
@@ -27,7 +35,15 @@ export default function ClaudeControlPanel() {
         </button>
       </div>
 
-      {view === 'runtime' ? <RuntimeControlPanel runtime="claude" /> : <CLAUDEEditor />}
+      {view === 'runtime'
+        ? (
+            <RuntimeControlPanel
+              runtime="claude"
+              liveConnected={liveConnected}
+              liveRevision={liveRevision}
+            />
+          )
+        : <CLAUDEEditor />}
     </div>
   );
 }

@@ -10,6 +10,7 @@ node_modules/
 
 # Testing
 coverage/
+.codex-run/
 
 # Next.js
 .next/
@@ -26,6 +27,7 @@ dist/
 .env.test.local
 .env.production.local
 *.env
+!.env.example
 
 # OS Files
 .DS_Store

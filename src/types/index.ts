@@ -26,6 +26,11 @@ export interface Hook {
   enabled?: boolean;
   active?: boolean;
   agent?: 'antigravity' | 'claude' | 'codex' | 'none';
+  execution_mode?: 'runtime' | 'agent' | 'shell';
+  runtime?: RuntimeId;
+  model?: string | null;
+  agent_scope?: RuntimeScope | null;
+  agent_id?: string | null;
   config: Record<string, any>;
   created_at: string;
 }
@@ -267,6 +272,7 @@ export type RuntimeId = 'codex' | 'claude' | 'antigravity';
 export type RuntimeScope = 'builtin' | 'system' | 'plugin' | 'global' | 'project' | 'legacy';
 export type WritableRuntimeScope = 'global' | 'project';
 export type RuntimeThreadStatus = 'running' | 'idle' | 'completed' | 'failed' | 'archived' | 'unknown';
+export type RuntimeSessionScope = 'all' | 'workspace';
 
 export interface RuntimeAgentDefinition {
   runtime: RuntimeId;
@@ -322,6 +328,44 @@ export interface RuntimeThreadEdge {
   status: string;
 }
 
+export interface RuntimeTransmission {
+  id: string;
+  runtime: RuntimeId;
+  thread_id: string;
+  role: 'user' | 'assistant';
+  message: string;
+  timestamp: string;
+  agent_name: string | null;
+  is_subagent: boolean;
+}
+
+export interface RuntimeSessionSummary {
+  id: string;
+  runtime: RuntimeId;
+  thread_id: string;
+  title: string;
+  status: RuntimeThreadStatus;
+  workspace: string | null;
+  model: string | null;
+  agent_name: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  is_subagent: boolean;
+  inferred: boolean;
+}
+
+export interface RuntimeSessionMessage {
+  id: string;
+  runtime: RuntimeId;
+  thread_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  model: string | null;
+  agent_name: string | null;
+  is_subagent: boolean;
+}
+
 export interface RuntimePaths {
   home: string;
   workspace: string;
@@ -350,6 +394,7 @@ export interface RuntimeOverview {
     available: boolean;
     workspace_dir: string;
     home_dir: string;
+    session_scope: RuntimeSessionScope;
   };
   paths: RuntimePaths;
   capabilities: {
@@ -396,6 +441,7 @@ export interface AssignRuntimeSkillInput {
   source_skill_id: string;
   target_runtime: RuntimeId;
   target_scope: WritableRuntimeScope;
+  target_agent_scope?: RuntimeScope;
   target_agent_id: string;
 }
 
@@ -407,4 +453,5 @@ export interface RuntimeSkillAssignmentResult {
   warnings: string[];
   installed_path: string;
   assigned_at: string;
+  target_agent_imported: boolean;
 }

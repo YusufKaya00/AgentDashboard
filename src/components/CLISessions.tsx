@@ -1,206 +1,325 @@
-/* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/set-state-in-effect */
 'use client';
 
-import { useState, useEffect } from 'react';
-import { MessageSquareText, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  Bot,
+  CircleAlert,
+  GitBranch,
+  LoaderCircle,
+  RefreshCw,
+  SquareTerminal,
+  UserRound,
+} from 'lucide-react';
 import { api } from '@/lib/api';
+import type {
+  RuntimeId,
+  RuntimeSessionMessage,
+  RuntimeSessionSummary,
+} from '@/types';
 
-interface CLIMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  model?: string;
-  timestamp: string;
-  tools?: string[];
-  type?: string;
+interface CLISessionsProps {
+  liveRevisions: Record<RuntimeId, number>;
 }
 
-interface CLISession {
-  id: string;
-  title: string;
-  message_count: number;
-  timestamp: string;
-  file_size: number;
-  pid?: number;
-  cwd?: string;
-}
+const RUNTIMES: Array<{
+  id: RuntimeId;
+  label: string;
+  active: string;
+  badge: string;
+}> = [
+  {
+    id: 'codex',
+    label: 'Codex',
+    active: 'border-sky-400/30 bg-sky-400/10 text-sky-200',
+    badge: 'border-sky-400/25 bg-sky-400/10 text-sky-300',
+  },
+  {
+    id: 'claude',
+    label: 'Claude',
+    active: 'border-amber-400/30 bg-amber-400/10 text-amber-200',
+    badge: 'border-amber-400/25 bg-amber-400/10 text-amber-300',
+  },
+  {
+    id: 'antigravity',
+    label: 'Antigravity',
+    active: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200',
+    badge: 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300',
+  },
+];
 
-export default function CLISessions() {
-  const [sessions, setSessions] = useState<CLISession[]>([]);
-  const [selectedSession, setSelectedSession] = useState<string | null>(null);
-  const [messages, setMessages] = useState<CLIMessage[]>([]);
+const runtimeMeta = (runtime: RuntimeId) => (
+  RUNTIMES.find((item) => item.id === runtime) || RUNTIMES[0]
+);
+
+const formatTimestamp = (value: string | null) => {
+  if (!value) return 'Unknown time';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown time';
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+const shortWorkspace = (workspace: string | null) => {
+  if (!workspace) return 'Workspace unknown';
+  const parts = workspace.replace(/\\/g, '/').split('/').filter(Boolean);
+  return parts.slice(-2).join('/');
+};
+
+export default function CLISessions({ liveRevisions }: CLISessionsProps) {
+  const [sessions, setSessions] = useState<RuntimeSessionSummary[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<RuntimeSessionMessage[]>([]);
+  const [runtimeFilter, setRuntimeFilter] = useState<RuntimeId | 'all'>('all');
   const [loading, setLoading] = useState(true);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const loadSessions = async () => {
+  const revisionKey = `${liveRevisions.codex}:${liveRevisions.claude}:${liveRevisions.antigravity}`;
+  const selectedSession = sessions.find((item) => item.id === selectedSessionId) || null;
+  const filteredSessions = useMemo(() => (
+    runtimeFilter === 'all'
+      ? sessions
+      : sessions.filter((item) => item.runtime === runtimeFilter)
+  ), [runtimeFilter, sessions]);
+
+  const loadSessions = useCallback(async () => {
     try {
-      const data = await api.getCLISessions();
-      const sortedSessions = Array.isArray(data) ? data : [];
-      setSessions(sortedSessions);
-      // Auto-select latest session if none selected
-      if (sortedSessions.length > 0 && !selectedSession) {
-        loadMessages(sortedSessions[0].id);
-      }
-    } catch (error) {
-      console.error('Error loading sessions:', error);
+      const data = await api.getRuntimeSessions();
+      setSessions(data);
+      setSelectedSessionId((current) => (
+        current && data.some((item) => item.id === current)
+          ? current
+          : data[0]?.id || null
+      ));
+      setError(null);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Failed to load runtime sessions');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadMessages = async (sessionId: string) => {
+  const loadMessages = useCallback(async (session: RuntimeSessionSummary) => {
     setMessagesLoading(true);
-    setSelectedSession(sessionId);
     try {
-      const data = await api.getCLIMessages(sessionId);
-      setMessages(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error('Error loading messages:', error);
+      setMessages(await api.getRuntimeSessionMessages(session.runtime, session.thread_id));
+      setError(null);
+    } catch (loadError) {
+      setMessages([]);
+      setError(loadError instanceof Error ? loadError.message : 'Failed to read runtime transcript');
     } finally {
       setMessagesLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void loadSessions();
-  }, []);
+  }, [loadSessions, revisionKey]);
 
-  const formatTime = (dateStr: string) => {
-    const d = new Date(dateStr);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  useEffect(() => {
+    if (selectedSession) void loadMessages(selectedSession);
+    else setMessages([]);
+  }, [loadMessages, revisionKey, selectedSession]);
+
+  const selectRuntime = (runtime: RuntimeId | 'all') => {
+    setRuntimeFilter(runtime);
+    if (runtime === 'all') return;
+    const firstMatch = sessions.find((item) => item.runtime === runtime);
+    if (firstMatch) setSelectedSessionId(firstMatch.id);
   };
 
-  if (loading) {
-    return (
-      <div className="card p-12 text-center animate-pulse">
-        <div className="text-muted uppercase tracking-[0.4em] font-black">Syncing Session Data...</div>
-      </div>
-    );
-  }
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[calc(100vh-200px)]">
-      {/* Session List */}
-      <div className="lg:col-span-1 flex flex-col space-y-4 h-full">
-        <div className="flex items-center justify-between px-1">
-          <div>
-            <h2 className="text-lg font-bold text-white tracking-tight">Session History</h2>
-            <p className="text-[10px] text-muted font-bold uppercase tracking-widest mt-0.5">CLI Transmission Logs</p>
-          </div>
-          <button
-            onClick={loadSessions}
-            className="icon-button"
-            title="Refresh sessions"
-            aria-label="Refresh sessions"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
-          {sessions.length === 0 ? (
-            <div className="card p-10 text-center border-dashed border-border">
-              <p className="text-muted text-xs font-bold uppercase">No active streams</p>
+    <section className="runtime-panel flex min-h-[620px] flex-col overflow-hidden lg:h-[calc(100vh-190px)] lg:flex-row">
+      <aside className="flex min-h-0 w-full flex-col border-b border-white/[0.07] lg:w-[360px] lg:shrink-0 lg:border-b-0 lg:border-r">
+        <div className="border-b border-white/[0.07] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-100">Runtime sessions</h2>
+              <p className="mt-1 text-[10px] text-zinc-600">{sessions.length} native transcripts detected</p>
             </div>
-          ) : (
-            sessions.map((s) => (
+            <button
+              className="icon-button"
+              type="button"
+              onClick={() => void loadSessions()}
+              title="Refresh sessions"
+              aria-label="Refresh sessions"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-1 rounded-md border border-white/[0.07] bg-zinc-950/40 p-1">
+            <button
+              type="button"
+              onClick={() => selectRuntime('all')}
+              className={`h-8 rounded text-[10px] font-medium transition-colors ${
+                runtimeFilter === 'all'
+                  ? 'bg-zinc-800 text-zinc-100'
+                  : 'text-zinc-600 hover:text-zinc-300'
+              }`}
+            >
+              All
+            </button>
+            {RUNTIMES.map((runtime) => (
               <button
-                key={s.id}
-                onClick={() => loadMessages(s.id)}
-                className={`w-full text-left p-4 rounded-xl border transition-all duration-300 group ${
-                  selectedSession === s.id
-                    ? 'bg-primary/10 border-primary/40 shadow-sm'
-                    : 'bg-surface border-border hover:border-white/20 hover:bg-white/5'
+                key={runtime.id}
+                type="button"
+                onClick={() => selectRuntime(runtime.id)}
+                className={`h-8 rounded border text-[10px] font-medium transition-colors ${
+                  runtimeFilter === runtime.id
+                    ? runtime.active
+                    : 'border-transparent text-zinc-600 hover:text-zinc-300'
                 }`}
               >
-                <p className={`text-sm truncate font-bold tracking-tight mb-1 transition-colors ${selectedSession === s.id ? 'text-primary' : 'text-white'}`}>
-                  {s.title || 'Untitled Session'}
-                </p>
-                <div className="flex items-center gap-3 text-[9px] text-muted font-bold uppercase tracking-widest opacity-70">
-                  <span className="tabular-nums">{formatTime(s.timestamp)}</span>
-                  <span className="w-1 h-1 rounded-full bg-white/10" />
-                  <span>{s.message_count} blocks</span>
-                </div>
+                {runtime.label}
               </button>
-            ))
+            ))}
+          </div>
+        </div>
+
+        <div className="custom-scrollbar max-h-[360px] flex-1 overflow-y-auto lg:max-h-none">
+          {loading ? (
+            <div className="runtime-empty">
+              <LoaderCircle className="h-5 w-5 animate-spin text-zinc-600" />
+              <span className="text-xs text-zinc-600">Reading session indexes...</span>
+            </div>
+          ) : filteredSessions.length === 0 ? (
+            <div className="runtime-empty">
+              <SquareTerminal className="h-5 w-5 text-zinc-700" />
+              <span className="text-xs text-zinc-600">No transcripts for this runtime.</span>
+            </div>
+          ) : (
+            filteredSessions.map((session) => {
+              const runtime = runtimeMeta(session.runtime);
+              const selected = selectedSessionId === session.id;
+              return (
+                <button
+                  key={session.id}
+                  type="button"
+                  onClick={() => setSelectedSessionId(session.id)}
+                  className={`w-full border-b border-white/[0.06] px-4 py-3.5 text-left transition-colors ${
+                    selected ? 'bg-white/[0.05]' : 'hover:bg-white/[0.025]'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className={`runtime-badge mt-0.5 shrink-0 ${runtime.badge}`}>
+                      {runtime.label}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className={`truncate text-xs font-medium ${selected ? 'text-zinc-100' : 'text-zinc-300'}`}>
+                        {session.title || 'Untitled session'}
+                      </div>
+                      <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[9px] text-zinc-600">
+                        <span className="shrink-0 tabular-nums">{formatTimestamp(session.updated_at || session.created_at)}</span>
+                        <span className="truncate">{session.model || 'Runtime default'}</span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-2 text-[9px] text-zinc-700">
+                        {session.is_subagent && <GitBranch className="h-3 w-3 shrink-0" />}
+                        <span className="truncate">{shortWorkspace(session.workspace)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              );
+            })
           )}
         </div>
-      </div>
+      </aside>
 
-      {/* Message View */}
-      <div className="lg:col-span-2 h-full">
+      <div className="flex min-h-[520px] min-w-0 flex-1 flex-col lg:min-h-0">
         {!selectedSession ? (
-          <div className="card p-20 text-center border-dashed border-border h-full flex flex-col items-center justify-center bg-white/[0.01]">
-            <div className="w-16 h-16 bg-surface rounded-2xl flex items-center justify-center mb-6 border border-border">
-              <MessageSquareText className="h-8 w-8 text-muted opacity-30" />
-            </div>
-            <h3 className="text-lg font-bold text-white mb-1">Select a stream</h3>
-            <p className="text-xs text-muted">Choose a conversation from the history to view data packets.</p>
-          </div>
-        ) : messagesLoading ? (
-          <div className="card p-20 text-center flex flex-col items-center justify-center h-full bg-white/[0.01]">
-            <div className="animate-pulse space-y-4">
-              <div className="w-12 h-1 bg-primary rounded-full mx-auto" />
-              <p className="text-[10px] font-black text-muted uppercase tracking-[0.3em]">Decoding Feed...</p>
+          <div className="runtime-empty flex-1 flex-col">
+            <SquareTerminal className="h-7 w-7 text-zinc-700" />
+            <div>
+              <div className="text-sm font-medium text-zinc-300">Select a runtime session</div>
+              <div className="mt-1 text-xs text-zinc-600">Messages are read from native transcript files.</div>
             </div>
           </div>
         ) : (
-          <div className="card overflow-hidden p-0 border-border flex flex-col h-full bg-surface/50 backdrop-blur-sm">
-            <div className="p-4 border-b border-border bg-white/[0.02] flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                <h3 className="text-[10px] font-black text-white uppercase tracking-widest">{messages.length} Data Packets</h3>
+          <>
+            <header className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] px-4 py-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`runtime-badge ${runtimeMeta(selectedSession.runtime).badge}`}>
+                    {runtimeMeta(selectedSession.runtime).label}
+                  </span>
+                  {selectedSession.is_subagent && (
+                    <span className="runtime-badge border-white/10 bg-white/5 text-zinc-500">
+                      <GitBranch className="h-3 w-3" />
+                      subagent
+                    </span>
+                  )}
+                  <span className="runtime-badge border-white/10 bg-white/5 text-zinc-500">
+                    {selectedSession.status}
+                  </span>
+                </div>
+                <h3 className="mt-1.5 truncate text-sm font-medium text-zinc-100">
+                  {selectedSession.title}
+                </h3>
               </div>
-              <span className="text-[9px] text-muted font-mono bg-black/40 px-3 py-1 rounded-lg border border-border">ID: {selectedSession.substring(0, 8)}</span>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
-              {messages.length === 0 ? (
-                <div className="py-20 text-center">
-                  <p className="text-muted text-xs font-bold uppercase tracking-widest">Stream contains no message data</p>
+              <div className="text-right text-[10px] text-zinc-600">
+                <div>{messages.length} messages</div>
+                <div className="mt-1 max-w-64 truncate font-mono">{selectedSession.thread_id}</div>
+              </div>
+            </header>
+
+            {error && (
+              <div className="flex items-center gap-2 border-b border-rose-400/15 bg-rose-400/5 px-4 py-2 text-xs text-rose-300">
+                <CircleAlert className="h-4 w-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="custom-scrollbar flex-1 overflow-y-auto p-4 sm:p-6">
+              {messagesLoading ? (
+                <div className="runtime-empty">
+                  <LoaderCircle className="h-5 w-5 animate-spin text-zinc-600" />
+                  <span className="text-xs text-zinc-600">Reading transcript...</span>
+                </div>
+              ) : messages.length === 0 ? (
+                <div className="runtime-empty">
+                  <span className="text-xs text-zinc-600">No user or assistant messages were found.</span>
                 </div>
               ) : (
-                messages.filter(m => m.type !== 'tool_result').map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`relative flex flex-col ${
-                      msg.role === 'user' ? 'items-end ml-12' : 'items-start mr-12'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      {msg.role === 'assistant' && (
-                        <span className="text-[9px] font-black text-primary uppercase tracking-widest">AI Agent</span>
-                      )}
-                      <span className="text-[9px] text-muted font-bold opacity-40">{formatTime(msg.timestamp)}</span>
-                      {msg.role === 'user' && (
-                        <span className="text-[9px] font-black text-accent uppercase tracking-widest">Operator</span>
-                      )}
-                    </div>
-                    
-                    <div className={`p-4 rounded-2xl border text-sm leading-relaxed transition-all ${
-                      msg.role === 'user'
-                        ? 'bg-primary/5 border-primary/20 text-white'
-                        : 'bg-background border-border text-white/90 shadow-sm'
-                    }`}>
-                      {msg.content}
-                    </div>
-
-                    {msg.tools && msg.tools.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {msg.tools.map((tool, i) => (
-                          <span key={i} className="text-[8px] px-2 py-0.5 bg-surface text-muted border border-border rounded font-bold uppercase tracking-widest">
-                            {tool}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))
+                <div className="mx-auto max-w-4xl space-y-5">
+                  {messages.map((message) => {
+                    const MessageIcon = message.role === 'user' ? UserRound : Bot;
+                    return (
+                      <article
+                        key={message.id}
+                        className={`flex gap-3 ${message.role === 'user' ? 'sm:pl-16' : 'sm:pr-16'}`}
+                      >
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/[0.08] bg-zinc-950/50 text-zinc-500">
+                          <MessageIcon className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                            <span className="font-medium text-zinc-400">
+                              {message.role === 'user' ? 'User' : message.agent_name || 'Assistant'}
+                            </span>
+                            <time className="text-zinc-700">{formatTimestamp(message.timestamp)}</time>
+                            {message.model && (
+                              <span className="truncate font-mono text-zinc-700">{message.model}</span>
+                            )}
+                          </div>
+                          <div className="mt-2 whitespace-pre-wrap break-words rounded-md border border-white/[0.07] bg-zinc-950/35 px-4 py-3 text-sm leading-6 text-zinc-300">
+                            {message.content}
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
               )}
             </div>
-          </div>
+          </>
         )}
       </div>
-    </div>
+    </section>
   );
 }
