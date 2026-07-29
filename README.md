@@ -1,5 +1,7 @@
 # Tnega Agent Runtime Dashboard
 
+[![CI](https://github.com/YusufKaya00/AgentDashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/YusufKaya00/AgentDashboard/actions/workflows/ci.yml)
+
 Local-first control and observability for Codex, Claude Code, and Gemini
 Antigravity agents.
 
